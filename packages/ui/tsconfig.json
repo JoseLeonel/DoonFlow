@@ -1,0 +1,9 @@
+{
+  "extends": "@doonflow/config/typescript",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": ["src"]
+}

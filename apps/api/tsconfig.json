@@ -1,0 +1,10 @@
+{
+  "extends": "@doonflow/config/typescript",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src",
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
+  },
+  "include": ["src"]
+}

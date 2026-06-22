@@ -1,0 +1,25 @@
+{
+  "name": "doonflow",
+  "private": true,
+  "version": "0.1.0",
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:migrate:dev": "pnpm --filter @doonflow/db migrate:dev",
+    "db:migrate:prod": "pnpm --filter @doonflow/db migrate:prod",
+    "db:generate": "pnpm --filter @doonflow/db generate",
+    "db:seed": "pnpm --filter @doonflow/db seed",
+    "setup:db": "bash scripts/setup-db.sh"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.0",
+    "typescript": "^5.6.0"
+  },
+  "packageManager": "pnpm@9.12.0"
+}

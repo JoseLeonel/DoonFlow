@@ -1,0 +1,351 @@
+// Esquema base de DoonFlow — módulo Usuarios y Roles (multiempresa).
+// Ver CLAUDE.md → "Base de datos" y "Arquitectura: Hexagonal".
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+/// Empresa — raíz del aislamiento multiempresa. Toda tabla de dominio cuelga de empresa_id.
+model Empresa {
+  id          String   @id @default(uuid())
+  nombre      String
+  activa      Boolean  @default(true)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  usuarios Usuario[]
+
+  @@map("empresa")
+}
+
+/// Rol — catálogo fijo (ver packages/shared/src/constants/roles.ts).
+/// No se crean roles nuevos sin pasar por agente-arquitecto.
+model Rol {
+  id          String   @id @default(uuid())
+  nombre      String   @unique
+  descripcion String?
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  usuarios     Usuario[]
+  rolPermisos  RolPermiso[]
+
+  @@map("rol")
+}
+
+/// Permiso — acción granular que puede otorgarse a un rol.
+model Permiso {
+  id          String   @id @default(uuid())
+  codigo      String   @unique
+  descripcion String?
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  rolPermisos RolPermiso[]
+
+  @@map("permiso")
+}
+
+/// Tabla puente rol↔permiso.
+model RolPermiso {
+  rolId     String @map("rol_id")
+  permisoId String @map("permiso_id")
+
+  rol     Rol     @relation(fields: [rolId], references: [id], onDelete: Cascade)
+  permiso Permiso @relation(fields: [permisoId], references: [id], onDelete: Cascade)
+
+  @@id([rolId, permisoId])
+  @@map("rol_permiso")
+}
+
+/// Usuario de la plataforma.
+/// passwordHash: solo en desarrollo local (sin Supabase Auth). En producción con Supabase este campo es nulo.
+model Usuario {
+  id           String   @id @default(uuid())
+  empresaId    String   @map("empresa_id")
+  authUserId   String?  @unique @map("auth_user_id")  // null en modo local
+  email        String   @unique
+  nombre       String
+  rolId        String   @map("rol_id")
+  passwordHash String?  @map("password_hash")         // solo desarrollo local
+  activo       Boolean  @default(true)
+  creadoEn     DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  rol     Rol     @relation(fields: [rolId], references: [id])
+
+  @@index([empresaId])
+  @@map("usuario")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO: INSPECCIONES (RF-01 a RF-14)
+// Arquitectura genérica de n-niveles: PANEL (sección) | PREGUNTA (hoja).
+// Cualquier número de niveles sin cambios de código.
+// Ejemplo real: Apartado → Subapartado → Sub-subapartado → Categoría → Ítem
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoInspeccion {
+  MINISTERIO_SALUD
+  AUDITORIA_INTERNA
+  CALIDAD
+  SEGURIDAD_OCUPACIONAL
+  SUPERVISION_OPERATIVA
+  OTRO
+}
+
+/// PANEL = sección con hijos (título de nivel); PREGUNTA = hoja con respuesta.
+enum TipoNodo {
+  PANEL
+  PREGUNTA
+}
+
+enum TipoRespuesta {
+  SI_NO
+  SELECCION_UNICA
+  SELECCION_MULTIPLE
+  TEXTO_LIBRE
+  NUMERICO
+  PUNTAJE_MANUAL
+}
+
+enum ModalidadPuntaje {
+  FIJO
+  PARCIAL
+  MANUAL
+  POR_OPCIONES
+}
+
+enum ReglaComentario {
+  NUNCA
+  SIEMPRE
+  CUANDO_NEGATIVO
+  CUANDO_PUNTAJE_MENOR_MAXIMO
+  CONFIGURABLE
+}
+
+/// RF-01 — Plantilla de inspección
+model InspeccionPlantilla {
+  id              String         @id @default(uuid())
+  empresaId       String         @map("empresa_id")
+  nombre          String
+  descripcion     String?
+  tipo            TipoInspeccion
+  activa          Boolean        @default(true)
+  puntajeMaximo   Decimal        @default(100) @map("puntaje_maximo") @db.Decimal(8, 2)
+  fechaVigencia   DateTime?      @map("fecha_vigencia") @db.Date
+  observaciones   String?
+  version         Int            @default(1)
+  creadoEn        DateTime       @default(now()) @map("creado_en")
+  actualizadoEn   DateTime       @updatedAt @map("actualizado_en")
+  creadoPorId     String?        @map("creado_por_id")
+
+  nodos           InspeccionNodo[]
+  rangosResultado InspeccionRangoResultado[]
+  inspecciones    Inspeccion[]
+  auditorias      InspeccionAuditoria[]
+
+  @@index([empresaId, activa])
+  @@map("inspeccion_plantilla")
+}
+
+/// RF-02/03/04 — Nodo genérico de n niveles: PANEL (sección con hijos) | PREGUNTA (hoja)
+///
+/// Ejemplo estructura Ministerio de Salud:
+///   nivel 0: PANEL "1. EDIFICIO"
+///   nivel 1: PANEL "1.1 PLANTA Y SUS ALREDEDORES"
+///   nivel 2: PANEL "1.1.1 ALREDEDORES"
+///   nivel 3: PANEL "a) Limpios"
+///   nivel 4: PREGUNTA "i) Almacenamiento adecuado del equipo en desuso."
+///
+/// La UI construye el árbol recursivamente a partir de padre_id.
+model InspeccionNodo {
+  id               String            @id @default(uuid())
+  empresaId        String            @map("empresa_id")
+  plantillaId      String            @map("plantilla_id")
+  padreId          String?           @map("padre_id")        // null = nodo raíz de la plantilla
+  tipo             TipoNodo
+  codigo           String            // ej: "1", "1.1", "1.1.1", "a", "i"
+  titulo           String            // Para PANEL: encabezado de sección; Para PREGUNTA: texto de la pregunta
+  criterio         String?           // Texto de criterio de evaluación (columna D del formulario MS)
+  orden            Int               @default(0)
+  nivel            Int               @default(0)             // profundidad (0 = raíz)
+  // Solo para tipo PREGUNTA:
+  tipoRespuesta    TipoRespuesta?    @map("tipo_respuesta")
+  modalidadPuntaje ModalidadPuntaje? @map("modalidad_puntaje")
+  puntajeMaximo    Decimal           @default(0) @map("puntaje_maximo") @db.Decimal(8, 2)
+  reglaComentario  ReglaComentario   @default(NUNCA) @map("regla_comentario")
+  umbralComentario Decimal?          @map("umbral_comentario") @db.Decimal(8, 2)
+  evidenciaObligatoria Boolean       @default(false) @map("evidencia_obligatoria")
+  evidenciaMinima  Int               @default(0) @map("evidencia_minima")
+  evidenciaMaxima  Int               @default(5) @map("evidencia_maxima")
+  activo           Boolean           @default(true)
+  creadoEn         DateTime          @default(now()) @map("creado_en")
+  actualizadoEn    DateTime          @updatedAt @map("actualizado_en")
+
+  plantilla  InspeccionPlantilla @relation(fields: [plantillaId], references: [id], onDelete: Cascade)
+  padre      InspeccionNodo?     @relation("JerarquiaNodo", fields: [padreId], references: [id], onDelete: Cascade)
+  hijos      InspeccionNodo[]    @relation("JerarquiaNodo")
+  opciones   InspeccionNodoOpcion[]
+  detalles   InspeccionDetalle[]
+
+  @@index([plantillaId, orden])
+  @@index([padreId])
+  @@map("inspeccion_nodo")
+}
+
+/// RF-04/05 — Opción de respuesta de un nodo PREGUNTA
+model InspeccionNodoOpcion {
+  id          String   @id @default(uuid())
+  nodoId      String   @map("nodo_id")
+  etiqueta    String   // ej: "Cumple todos los requisitos"
+  criterio    String?  // descripción de cuándo aplica esta opción
+  puntaje     Decimal  @default(0) @db.Decimal(8, 2)
+  orden       Int      @default(0)
+  creadoEn    DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  nodo InspeccionNodo @relation(fields: [nodoId], references: [id], onDelete: Cascade)
+
+  @@index([nodoId, orden])
+  @@map("inspeccion_nodo_opcion")
+}
+
+/// RF-10 — Rango de clasificación del resultado por plantilla
+model InspeccionRangoResultado {
+  id            String   @id @default(uuid())
+  plantillaId   String   @map("plantilla_id")
+  desde         Decimal  @db.Decimal(5, 2)
+  hasta         Decimal  @db.Decimal(5, 2)
+  clasificacion String
+  color         String   @default("#6B7280")
+  orden         Int      @default(0)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+
+  plantilla InspeccionPlantilla @relation(fields: [plantillaId], references: [id], onDelete: Cascade)
+
+  @@index([plantillaId])
+  @@map("inspeccion_rango_resultado")
+}
+
+// ── OPERACIÓN ────────────────────────────────────────────────────────────────
+
+/// RF-08 — Cabecera de una inspección ejecutada
+model Inspeccion {
+  id                     String    @id @default(uuid())
+  empresaId              String    @map("empresa_id")
+  plantillaId            String    @map("plantilla_id")
+  plantillaVersion       Int       @map("plantilla_version")
+  inspectorId            String    @map("inspector_id")
+  establecimiento        String
+  fechaInicio            DateTime  @map("fecha_inicio")
+  fechaFin               DateTime? @map("fecha_fin")
+  estado                 String    @default("EN_PROGRESO")
+  puntajeObtenido        Decimal   @default(0) @map("puntaje_obtenido") @db.Decimal(8, 2)
+  puntajeMaximo          Decimal   @default(0) @map("puntaje_maximo") @db.Decimal(8, 2)
+  porcentajeCumplimiento Decimal   @default(0) @map("porcentaje_cumplimiento") @db.Decimal(5, 2)
+  clasificacion          String?
+  observaciones          String?
+  creadoEn               DateTime  @default(now()) @map("creado_en")
+  actualizadoEn          DateTime  @updatedAt @map("actualizado_en")
+
+  plantilla      InspeccionPlantilla    @relation(fields: [plantillaId], references: [id])
+  detalles       InspeccionDetalle[]
+  evidencias     InspeccionEvidencia[]
+  reinspecciones InspeccionReinspeccion[]
+
+  @@index([empresaId, estado])
+  @@index([plantillaId])
+  @@map("inspeccion")
+}
+
+/// RF-08 — Detalle: una fila por nodo PREGUNTA respondido.
+/// Guarda snapshot de la ruta jerárquica (RF-14: las inspecciones históricas
+/// conservan la estructura vigente al momento de su ejecución).
+model InspeccionDetalle {
+  id                  String   @id @default(uuid())
+  inspeccionId        String   @map("inspeccion_id")
+  nodoId              String   @map("nodo_id")
+  // Snapshot de la ruta completa al momento de la inspección
+  rutaCodigos         String   @map("ruta_codigos")      // "1|1.1|1.1.1|a|i"
+  rutaTitulos         String   @map("ruta_titulos")      // "EDIFICIO|PLANTA...|ALREDEDORES|Limpios|Almacenamiento..."
+  preguntaTitulo      String   @map("pregunta_titulo")   // snapshot del texto de la pregunta
+  criterioSnapshot    String?  @map("criterio_snapshot") // snapshot del criterio
+  tipoRespuesta       String   @map("tipo_respuesta")
+  respuestaValor      String?  @map("respuesta_valor")
+  respuestasMultiples String[] @map("respuestas_multiples")
+  puntajeObtenido     Decimal  @default(0) @map("puntaje_obtenido") @db.Decimal(8, 2)
+  puntajeMaximo       Decimal  @default(0) @map("puntaje_maximo") @db.Decimal(8, 2)
+  comentario          String?
+  creadoEn            DateTime @default(now()) @map("creado_en")
+  actualizadoEn       DateTime @updatedAt @map("actualizado_en")
+
+  inspeccion Inspeccion     @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  nodo       InspeccionNodo @relation(fields: [nodoId], references: [id])
+  evidencias InspeccionEvidencia[]
+
+  @@index([inspeccionId])
+  @@map("inspeccion_detalle")
+}
+
+/// RF-07 — Evidencia adjunta
+model InspeccionEvidencia {
+  id           String   @id @default(uuid())
+  inspeccionId String   @map("inspeccion_id")
+  detalleId    String?  @map("detalle_id")
+  tipo         String
+  url          String
+  nombre       String
+  tamanoBytes  Int?     @map("tamano_bytes")
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  inspeccion Inspeccion         @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  detalle    InspeccionDetalle? @relation(fields: [detalleId], references: [id])
+
+  @@index([inspeccionId])
+  @@map("inspeccion_evidencia")
+}
+
+/// RF-11 — Reinspección
+model InspeccionReinspeccion {
+  id                     String   @id @default(uuid())
+  inspeccionId           String   @map("inspeccion_id")
+  numero                 Int
+  fecha                  DateTime
+  inspectorId            String   @map("inspector_id")
+  comentarios            String?
+  puntajeObtenido        Decimal  @default(0) @map("puntaje_obtenido") @db.Decimal(8, 2)
+  porcentajeCumplimiento Decimal  @default(0) @map("porcentaje_cumplimiento") @db.Decimal(5, 2)
+  creadoEn               DateTime @default(now()) @map("creado_en")
+
+  inspeccion Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+
+  @@index([inspeccionId])
+  @@map("inspeccion_reinspeccion")
+}
+
+/// RF-12 — Auditoría de cambios en configuración
+model InspeccionAuditoria {
+  id           String   @id @default(uuid())
+  plantillaId  String?  @map("plantilla_id")
+  usuarioId    String   @map("usuario_id")
+  tabla        String
+  registroId   String   @map("registro_id")
+  accion       String
+  valorAntes   Json?    @map("valor_antes")
+  valorDespues Json?    @map("valor_despues")
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  plantilla InspeccionPlantilla? @relation(fields: [plantillaId], references: [id])
+
+  @@index([plantillaId])
+  @@index([usuarioId])
+  @@map("inspeccion_auditoria")
+}
