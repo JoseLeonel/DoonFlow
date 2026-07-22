@@ -1,11 +1,17 @@
 import type { PrismaClient } from "@prisma/client";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import type { RequestHandler } from "express";
 import { IniciarSesionUseCase } from "./application/casos-uso/iniciar-sesion.usecase";
+import { GestionarUsuarioUseCase } from "./application/casos-uso/gestionar-usuario.usecase";
 import { AuthController } from "./infrastructure/auth.controller";
+import { UsuarioController } from "./infrastructure/usuario.controller";
 import { crearAuthRouter } from "./infrastructure/auth.router";
+import { crearUsuariosRouter } from "./infrastructure/usuarios.router";
 import { LocalAuthAdapter } from "./infrastructure/local-auth.adapter";
 import { SupabaseAuthAdapter } from "./infrastructure/supabase-auth.adapter";
 import { UsuarioPrismaRepository } from "./infrastructure/usuario.prisma-repository";
+import { RolPrismaRepository } from "./infrastructure/rol.prisma-repository";
+import type { RegistradorEventoAuditoria } from "../../shared/auditoria/registrar-evento-auditoria";
 
 /**
  * Composición del módulo auth.
@@ -16,8 +22,11 @@ import { UsuarioPrismaRepository } from "./infrastructure/usuario.prisma-reposit
 export function crearModuloAuth(
   prisma: PrismaClient,
   supabase: SupabaseClient | null,
+  autenticar: RequestHandler,
+  registrarEventoAuditoria?: RegistradorEventoAuditoria,
 ) {
   const usuarioRepository = new UsuarioPrismaRepository(prisma);
+  const rolRepository = new RolPrismaRepository(prisma);
 
   const esLocal =
     !process.env.NEXT_PUBLIC_SUPABASE_URL ||
@@ -37,8 +46,14 @@ export function crearModuloAuth(
     console.log("[auth] Modo SUPABASE");
   }
 
-  const iniciarSesionUseCase = new IniciarSesionUseCase(proveedorAuth, usuarioRepository);
-  const controller = new AuthController(iniciarSesionUseCase);
+  const iniciarSesionUseCase = new IniciarSesionUseCase(proveedorAuth, usuarioRepository, registrarEventoAuditoria);
+  const gestionarUsuarioUseCase = new GestionarUsuarioUseCase(usuarioRepository, rolRepository, registrarEventoAuditoria);
 
-  return { router: crearAuthRouter(controller) };
+  const authController = new AuthController(iniciarSesionUseCase, usuarioRepository);
+  const usuarioController = new UsuarioController(gestionarUsuarioUseCase);
+
+  return {
+    router: crearAuthRouter(authController, autenticar),
+    routerUsuarios: crearUsuariosRouter(usuarioController, autenticar),
+  };
 }

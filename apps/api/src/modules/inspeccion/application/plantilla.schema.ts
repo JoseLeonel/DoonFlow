@@ -30,7 +30,7 @@ export const crearNodoSchema = z.object({
   evidenciaMaxima: z.number().int().min(0).default(5),
 });
 
-export const actualizarNodoSchema = crearNodoSchema.partial().omit({ padreId: true, tipo: true });
+export const actualizarNodoSchema = crearNodoSchema.partial().omit({ padreId: true });
 
 export const reordenarSchema = z.object({
   items: z.array(z.object({ id: z.string().uuid(), orden: z.number().int().min(0) })),

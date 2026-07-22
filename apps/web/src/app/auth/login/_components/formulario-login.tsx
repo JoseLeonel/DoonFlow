@@ -1,6 +1,7 @@
 "use client";
 
 import { Boton, Casilla, GrupoInput } from "@doonflow/ui";
+import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { usarFormularioLogin } from "../_hooks/usar-formulario-login";
 
@@ -9,6 +10,7 @@ export function FormularioLogin() {
   const { enviar, cargando, error } = usarFormularioLogin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const sesionExpirada = useSearchParams().get("motivo") === "sesion_expirada";
 
   function alEnviar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -17,6 +19,12 @@ export function FormularioLogin() {
 
   return (
     <form onSubmit={alEnviar}>
+      {sesionExpirada && (
+        <p className="mb-4 rounded-lg bg-yellow-light/[0.08] px-4 py-3 text-sm text-yellow-dark">
+          Tu sesión expiró, inicia sesión de nuevo.
+        </p>
+      )}
+
       <GrupoInput
         type="email"
         label="Email"

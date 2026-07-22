@@ -8,10 +8,14 @@ import {
 } from "../domain/auth.errors";
 import { iniciarSesionSchema } from "../application/auth.schema";
 import type { IniciarSesionUseCase } from "../application/casos-uso/iniciar-sesion.usecase";
+import type { UsuarioRepositoryPort } from "../domain/usuario.repository.port";
 
 /** Adaptador HTTP — solo traduce request/response ↔ caso de uso. Sin lógica de negocio. */
 export class AuthController {
-  constructor(private readonly iniciarSesionUseCase: IniciarSesionUseCase) {}
+  constructor(
+    private readonly iniciarSesionUseCase: IniciarSesionUseCase,
+    private readonly usuarioRepository: UsuarioRepositoryPort,
+  ) {}
 
   iniciarSesion = async (req: Request, res: Response, next: NextFunction) => {
     try {
@@ -30,6 +34,37 @@ export class AuthController {
           },
         }),
       );
+    } catch (error) {
+      next(this.mapearError(error));
+    }
+  };
+
+  /** GET /auth/me — usuario autenticado + su alcance resuelto (nombres incluidos). */
+  miInfo = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const detalle = await this.usuarioRepository.obtenerPorId(req.usuario!.id, req.usuario!.empresaId);
+      if (!detalle) throw new ErrorHttp(404, "usuario_no_encontrado", "El usuario no existe.");
+
+      const usuario = { id: detalle.id, email: detalle.email, nombre: detalle.nombre, rol: detalle.rolNombre };
+
+      if (detalle.clienteId) {
+        res.json(respuestaExitosa({
+          usuario,
+          alcance: { tipo: "CLIENTE", cliente: { id: detalle.clienteId, empresa: detalle.clienteNombre } },
+        }));
+        return;
+      }
+
+      if (detalle.rolNombre === "usuario_sucursal") {
+        const sucursales = [
+          ...(detalle.sucursalId ? [{ id: detalle.sucursalId, nombre: detalle.sucursalNombre ?? "" }] : []),
+          ...detalle.sucursalesAdicionales,
+        ];
+        res.json(respuestaExitosa({ usuario, alcance: { tipo: "SUCURSAL", sucursales } }));
+        return;
+      }
+
+      res.json(respuestaExitosa({ usuario, alcance: { tipo: "TOTAL" } }));
     } catch (error) {
       next(this.mapearError(error));
     }

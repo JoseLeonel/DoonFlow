@@ -6,3 +6,10 @@ export const iniciarSesionSchema = z.object({
 });
 
 export type IniciarSesionInput = z.infer<typeof iniciarSesionSchema>;
+
+export const actualizarAsignacionSucursalesSchema = z.object({
+  sucursalPrincipalId: z.string().uuid().nullable(),
+  sucursalesAdicionalesIds: z.array(z.string().uuid()),
+});
+
+export type ActualizarAsignacionSucursalesInput = z.infer<typeof actualizarAsignacionSucursalesSchema>;

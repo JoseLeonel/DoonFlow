@@ -1,6 +1,47 @@
 import type { PrismaClient } from "@prisma/client";
-import type { PlantillaRepositoryPort, FiltrosPlantilla, ResultadoPaginado, DatosCrearNodo } from "../domain/plantilla.repository.port";
+import type { PlantillaRepositoryPort, FiltrosPlantilla, ResultadoPaginado, DatosCrearNodo, DatosCambiarEstadoAprobacion } from "../domain/plantilla.repository.port";
 import type { Plantilla, PlantillaCompleta, NodoArbol } from "../domain/plantilla.entity";
+
+/** Construye el árbol recursivo a partir de una lista plana de nodos — reutilizado por `certificacion.prisma-repository.ts`. */
+export function construirArbolNodos(nodos: any[]): NodoArbol[] {
+  const mapa = new Map<string, NodoArbol>();
+  const raices: NodoArbol[] = [];
+
+  for (const n of nodos) {
+    mapa.set(n.id, {
+      id: n.id, padreId: n.padreId ?? null, tipo: n.tipo, codigo: n.codigo,
+      titulo: n.titulo, criterio: n.criterio ?? undefined, orden: n.orden, nivel: n.nivel,
+      activo: n.activo, puntajeMaximo: Number(n.puntajeMaximo),
+      tipoRespuesta: n.tipoRespuesta ?? undefined,
+      modalidadPuntaje: n.modalidadPuntaje ?? undefined,
+      reglaComentario: n.reglaComentario,
+      evidenciaObligatoria: n.evidenciaObligatoria,
+      evidenciaMinima: n.evidenciaMinima, evidenciaMaxima: n.evidenciaMaxima,
+      opciones: (n.opciones ?? []).map((o: any) => ({
+        id: o.id, etiqueta: o.etiqueta, criterio: o.criterio ?? undefined,
+        puntaje: Number(o.puntaje), orden: o.orden,
+      })),
+      hijos: [],
+    });
+  }
+
+  for (const nodo of mapa.values()) {
+    if (!nodo.padreId) {
+      raices.push(nodo);
+    } else {
+      const padre = mapa.get(nodo.padreId);
+      if (padre) padre.hijos.push(nodo);
+      else raices.push(nodo); // padre eliminado, promover a raíz
+    }
+  }
+
+  const ordenar = (lista: NodoArbol[]) => {
+    lista.sort((a, b) => a.orden - b.orden);
+    lista.forEach((n) => ordenar(n.hijos));
+  };
+  ordenar(raices);
+  return raices;
+}
 
 export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
   constructor(private readonly prisma: PrismaClient) {}
@@ -13,6 +54,12 @@ export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
       tipo: p.tipo, activa: p.activa, puntajeMaximo: Number(p.puntajeMaximo),
       fechaVigencia: p.fechaVigencia ?? undefined, observaciones: p.observaciones ?? undefined,
       version: p.version, creadoEn: p.creadoEn, actualizadoEn: p.actualizadoEn,
+      estadoAprobacion: p.estadoAprobacion,
+      solicitadoPorId: p.solicitadoPorId ?? null,
+      solicitadoEn: p.solicitadoEn ?? null,
+      aprobadorId: p.aprobadorId ?? null,
+      resueltoEn: p.resueltoEn ?? null,
+      comentarioResolucion: p.comentarioResolucion ?? null,
     };
   }
 
@@ -152,10 +199,14 @@ export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
   async actualizarNodo(nodoId: string, _empresaId: string, datos: any): Promise<NodoArbol> {
     const n = await this.prisma.inspeccionNodo.update({
       where: { id: nodoId },
-      data: { ...datos, tipoRespuesta: datos.tipoRespuesta as any, modalidadPuntaje: datos.modalidadPuntaje as any, reglaComentario: datos.reglaComentario as any },
+      data: { ...datos, tipo: datos.tipo as any, tipoRespuesta: datos.tipoRespuesta as any, modalidadPuntaje: datos.modalidadPuntaje as any, reglaComentario: datos.reglaComentario as any },
       include: { opciones: true },
     });
     return this.construirArbol([n])[0]!;
+  }
+
+  async contarHijosNodo(nodoId: string, _empresaId: string): Promise<number> {
+    return this.prisma.inspeccionNodo.count({ where: { padreId: nodoId } });
   }
 
   async eliminarNodo(nodoId: string, _empresaId: string): Promise<void> {
@@ -167,5 +218,55 @@ export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
     await this.prisma.$transaction(
       items.map(({ id, orden }) => this.prisma.inspeccionNodo.update({ where: { id }, data: { orden } })),
     );
+  }
+
+  async guardarRangos(plantillaId: string, _empresaId: string, rangos: any[]): Promise<any[]> {
+    return this.prisma.$transaction(async (tx) => {
+      await tx.inspeccionRangoResultado.deleteMany({ where: { plantillaId } });
+      if (rangos.length === 0) return [];
+      await tx.inspeccionRangoResultado.createMany({
+        data: rangos.map((r) => ({
+          plantillaId,
+          desde: r.desde,
+          hasta: r.hasta,
+          clasificacion: r.clasificacion,
+          color: r.color,
+          orden: r.orden,
+        })),
+      });
+      const guardados = await tx.inspeccionRangoResultado.findMany({
+        where: { plantillaId }, orderBy: { orden: "asc" },
+      });
+      return guardados.map((r: any) => ({
+        id: r.id, desde: Number(r.desde), hasta: Number(r.hasta),
+        clasificacion: r.clasificacion, color: r.color, orden: r.orden,
+      }));
+    });
+  }
+
+  // ── Aprobación (007-gobernanza-permisos-aprobacion) ────────────────────────
+
+  async cambiarEstadoAprobacion(id: string, _empresaId: string, datos: DatosCambiarEstadoAprobacion): Promise<Plantilla> {
+    const p = await this.prisma.inspeccionPlantilla.update({
+      where: { id },
+      data: {
+        estadoAprobacion: datos.estadoAprobacion,
+        solicitadoPorId: datos.solicitadoPorId,
+        solicitadoEn: datos.solicitadoEn,
+        aprobadorId: datos.aprobadorId,
+        resueltoEn: datos.resueltoEn,
+        comentarioResolucion: datos.comentarioResolucion,
+      },
+    });
+    return this.mp(p);
+  }
+
+  async listarPendientesAprobacion(empresaId: string, pagina: number, porPagina: number): Promise<ResultadoPaginado<Plantilla>> {
+    const where = { empresaId, estadoAprobacion: "EN_REVISION" as const };
+    const [items, total] = await Promise.all([
+      this.prisma.inspeccionPlantilla.findMany({ where, orderBy: { solicitadoEn: "asc" }, skip: (pagina - 1) * porPagina, take: porPagina }),
+      this.prisma.inspeccionPlantilla.count({ where }),
+    ]);
+    return { items: items.map((p) => this.mp(p)), total, pagina, porPagina };
   }
 }

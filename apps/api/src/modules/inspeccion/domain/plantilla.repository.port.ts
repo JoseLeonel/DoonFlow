@@ -1,4 +1,4 @@
-import type { Plantilla, PlantillaCompleta, NodoArbol } from "./plantilla.entity";
+import type { EstadoAprobacionPlantilla, Plantilla, PlantillaCompleta, NodoArbol, RangoResultado } from "./plantilla.entity";
 
 export interface FiltrosPlantilla {
   empresaId: string; activa?: boolean; tipo?: string; pagina?: number; porPagina?: number;
@@ -27,6 +27,22 @@ export interface PlantillaRepositoryPort {
   // Nodos genéricos
   crearNodo(datos: DatosCrearNodo): Promise<NodoArbol>;
   actualizarNodo(nodoId: string, empresaId: string, datos: Partial<Omit<DatosCrearNodo,"plantillaId"|"empresaId">>): Promise<NodoArbol>;
+  contarHijosNodo(nodoId: string, empresaId: string): Promise<number>;
   eliminarNodo(nodoId: string, empresaId: string): Promise<void>;
   reordenarNodos(nodos: { id: string; orden: number }[]): Promise<void>;
+  // Rangos de resultado
+  /** Reemplaza todos los rangos de una plantilla por el array recibido (upsert completo). */
+  guardarRangos(plantillaId: string, empresaId: string, rangos: Omit<RangoResultado, "id">[]): Promise<RangoResultado[]>;
+  // Aprobación (007-gobernanza-permisos-aprobacion)
+  cambiarEstadoAprobacion(id: string, empresaId: string, datos: DatosCambiarEstadoAprobacion): Promise<Plantilla>;
+  listarPendientesAprobacion(empresaId: string, pagina: number, porPagina: number): Promise<ResultadoPaginado<Plantilla>>;
+}
+
+export interface DatosCambiarEstadoAprobacion {
+  estadoAprobacion: EstadoAprobacionPlantilla;
+  solicitadoPorId?: string | null;
+  solicitadoEn?: Date | null;
+  aprobadorId?: string | null;
+  resueltoEn?: Date | null;
+  comentarioResolucion?: string | null;
 }

@@ -15,15 +15,19 @@ async function proxy(request: NextRequest, params: { path: string[] }) {
   const ruta = params.path.join("/");
   const url = `${API_URL}/inspeccion/${ruta}${request.nextUrl.search}`;
 
-  const body = ["GET", "DELETE"].includes(request.method) ? undefined : await request.text();
+  const tieneCuerpo = !["GET", "DELETE"].includes(request.method);
+  // Se reenvía el cuerpo crudo (blob) sin parsear, respetando el Content-Type original —
+  // necesario para las evidencias de certificaciones (multipart/form-data), que un
+  // Content-Type fijo en "application/json" rompería (T-223).
+  const contentType = request.headers.get("content-type");
 
   const apiRes = await fetch(url, {
     method: request.method,
     headers: {
-      "Content-Type": "application/json",
       Authorization: `Bearer ${token}`,
+      ...(contentType ? { "Content-Type": contentType } : {}),
     },
-    body: body || undefined,
+    body: tieneCuerpo ? await request.blob() : undefined,
   });
 
   const data = await apiRes.json();

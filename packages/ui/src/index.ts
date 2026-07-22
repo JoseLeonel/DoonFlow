@@ -1,3 +1,10 @@
 export { Boton } from "./boton";
 export { GrupoInput } from "./grupo-input";
 export { Casilla } from "./casilla";
+export { Breadcrumb } from "./breadcrumb";
+export type { SegmentoBreadcrumb } from "./breadcrumb";
+export { DialogoConfirmacion } from "./dialogo-confirmacion";
+export { Paginador } from "./paginador";
+export type { PropsPaginador } from "./paginador";
+export { TablaComparativa } from "./tabla-comparativa";
+export type { ColumnaComparativa, FilaComparativa, PropsTablaComparativa } from "./tabla-comparativa";

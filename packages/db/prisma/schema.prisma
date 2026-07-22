@@ -19,7 +19,8 @@ model Empresa {
   creadoEn    DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
-  usuarios Usuario[]
+  usuarios  Usuario[]
+  clientes  Cliente[]
 
   @@map("empresa")
 }
@@ -78,11 +79,96 @@ model Usuario {
   creadoEn     DateTime @default(now()) @map("creado_en")
   actualizadoEn DateTime @updatedAt @map("actualizado_en")
 
-  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
-  rol     Rol     @relation(fields: [rolId], references: [id])
+  sucursalId   String?  @map("sucursal_id")
+  clienteId    String?  @map("cliente_id")
+
+  empresa  Empresa   @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  rol      Rol       @relation(fields: [rolId], references: [id])
+  sucursalPrincipal Sucursal? @relation("SucursalPrincipal", fields: [sucursalId], references: [id])
+  accesosSucursal   UsuarioSucursalAcceso[]
+  cliente  Cliente?  @relation(fields: [clienteId], references: [id])
+  plantillasSolicitadas InspeccionPlantilla[] @relation("PlantillaSolicitante")
+  plantillasAprobadas   InspeccionPlantilla[] @relation("PlantillaAprobador")
+  registrosAuditoria    RegistroAuditoria[]
+  avisosPrivacidadRegistrados AvisoPrivacidad[]
+  reportesGenerados     ReporteGenerado[]
+  importacionesCreadas  ImportacionLote[]
 
   @@index([empresaId])
+  @@index([sucursalId])
+  @@index([empresaId, clienteId])
   @@map("usuario")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO: CLIENTES
+// Personas de contacto y empresas registradas para uso en Mantenimientos.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Cliente — empresa o persona responsable de contacto.
+model Cliente {
+  id                    String   @id @default(uuid())
+  empresaId             String   @map("empresa_id")
+  nombreResponsable     String   @map("nombre_responsable") @db.VarChar(200)
+  empresa               String   @db.VarChar(200)
+  identificacionEmpresa String?  @map("identificacion_empresa") @db.VarChar(50)
+  correo1               String   @db.VarChar(150)
+  correo2               String?  @db.VarChar(150)
+  correo3               String?  @db.VarChar(150)
+  direccion             String?  @db.VarChar(300)
+  movil                 String?  @db.VarChar(20)
+  activo                Boolean  @default(true)
+  creadoEn              DateTime @default(now()) @map("creado_en")
+  actualizadoEn         DateTime @updatedAt @map("actualizado_en")
+
+  empresaRel Empresa    @relation(fields: [empresaId], references: [id])
+  sucursales Sucursal[]
+  usuarios   Usuario[]
+
+  @@index([empresaId, activo])
+  @@index([empresaId, creadoEn])
+  @@map("cliente")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO: SUCURSALES
+// Cada Cliente (empresa) tiene N Sucursales; la certificación BPM se ejecuta
+// y lleva histórico por sucursal, no por cliente.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Sucursal — planta/establecimiento físico de un Cliente, unidad de certificación.
+model Sucursal {
+  id            String   @id @default(uuid())
+  empresaId     String   @map("empresa_id")
+  clienteId     String   @map("cliente_id")
+  nombre        String   @db.VarChar(150)
+  direccion     String?  @db.VarChar(300)
+  correo        String?  @db.VarChar(150)
+  movil         String?  @db.VarChar(20)
+  activo        Boolean  @default(true)
+  creadoEn      DateTime @default(now()) @map("creado_en")
+  actualizadoEn DateTime @updatedAt @map("actualizado_en")
+
+  cliente  Cliente  @relation(fields: [clienteId], references: [id])
+  usuarios Usuario[] @relation("SucursalPrincipal")
+  accesos  UsuarioSucursalAcceso[]
+  inspecciones Inspeccion[]
+
+  @@index([empresaId, clienteId, activo])
+  @@map("sucursal")
+}
+
+/// Tabla puente — sucursales adicionales de consulta para un usuario (además de su sucursal principal).
+model UsuarioSucursalAcceso {
+  usuarioId  String   @map("usuario_id")
+  sucursalId String   @map("sucursal_id")
+  creadoEn   DateTime @default(now()) @map("creado_en")
+
+  usuario  Usuario  @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  sucursal Sucursal @relation(fields: [sucursalId], references: [id], onDelete: Cascade)
+
+  @@id([usuarioId, sucursalId])
+  @@map("usuario_sucursal_acceso")
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -147,13 +233,33 @@ model InspeccionPlantilla {
   actualizadoEn   DateTime       @updatedAt @map("actualizado_en")
   creadoPorId     String?        @map("creado_por_id")
 
+  /// 007-gobernanza-permisos-aprobacion — flujo borrador → en revisión → aprobada/rechazada,
+  /// condición adicional (no reemplaza `activa`) para poder iniciar una certificación nueva.
+  estadoAprobacion     EstadoAprobacionPlantilla @default(BORRADOR) @map("estado_aprobacion")
+  solicitadoPorId      String?   @map("solicitado_por_id")
+  solicitadoEn         DateTime? @map("solicitado_en")
+  aprobadorId          String?   @map("aprobador_id")
+  resueltoEn           DateTime? @map("resuelto_en")
+  comentarioResolucion String?   @map("comentario_resolucion")
+
   nodos           InspeccionNodo[]
   rangosResultado InspeccionRangoResultado[]
   inspecciones    Inspeccion[]
   auditorias      InspeccionAuditoria[]
+  solicitante Usuario? @relation("PlantillaSolicitante", fields: [solicitadoPorId], references: [id])
+  aprobador   Usuario? @relation("PlantillaAprobador", fields: [aprobadorId], references: [id])
 
   @@index([empresaId, activa])
+  @@index([empresaId, estadoAprobacion])
   @@map("inspeccion_plantilla")
+}
+
+/// 007-gobernanza-permisos-aprobacion
+enum EstadoAprobacionPlantilla {
+  BORRADOR
+  EN_REVISION
+  APROBADA
+  RECHAZADA
 }
 
 /// RF-02/03/04 — Nodo genérico de n niveles: PANEL (sección con hijos) | PREGUNTA (hoja)
@@ -244,7 +350,10 @@ model Inspeccion {
   plantillaId            String    @map("plantilla_id")
   plantillaVersion       Int       @map("plantilla_version")
   inspectorId            String    @map("inspector_id")
-  establecimiento        String
+  sucursalId             String?   @map("sucursal_id")
+  /// @deprecated reemplazado por `sucursalId` (sprint 015-wizard-certificacion) — se conserva por historial, no se elimina.
+  establecimiento        String?
+  periodoEtiqueta        String?   @map("periodo_etiqueta") @db.VarChar(50)
   fechaInicio            DateTime  @map("fecha_inicio")
   fechaFin               DateTime? @map("fecha_fin")
   estado                 String    @default("EN_PROGRESO")
@@ -253,16 +362,26 @@ model Inspeccion {
   porcentajeCumplimiento Decimal   @default(0) @map("porcentaje_cumplimiento") @db.Decimal(5, 2)
   clasificacion          String?
   observaciones          String?
+  capturaOffline         Boolean   @default(false) @map("captura_offline")
+  sincronizadoEn         DateTime? @map("sincronizado_en")
   creadoEn               DateTime  @default(now()) @map("creado_en")
   actualizadoEn          DateTime  @updatedAt @map("actualizado_en")
 
   plantilla      InspeccionPlantilla    @relation(fields: [plantillaId], references: [id])
+  sucursal       Sucursal?                @relation(fields: [sucursalId], references: [id])
   detalles       InspeccionDetalle[]
   evidencias     InspeccionEvidencia[]
   reinspecciones InspeccionReinspeccion[]
+  // [[005-certificacion-plan-cumplimiento]] agrega aquí (pausado, no implementar todavía):
+  //   firmadoPorId, firmadoEn, codigoVerificacion, pdfUrl, fechaVencimiento, resultadoFinal, relación firmadoPor.
+  // [[013-hallazgos-plan-cumplimiento]] agrega (cuando 005 se retome): hallazgos Hallazgo[], planCumplimiento PlanCumplimiento?
 
   @@index([empresaId, estado])
   @@index([plantillaId])
+  @@index([sucursalId])
+  @@index([empresaId, sucursalId, estado, creadoEn])
+  @@index([sucursalId, fechaInicio])
+  @@index([empresaId, capturaOffline])
   @@map("inspeccion")
 }
 
@@ -348,4 +467,130 @@ model InspeccionAuditoria {
   @@index([plantillaId])
   @@index([usuarioId])
   @@map("inspeccion_auditoria")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO: SEGURIDAD, PRIVACIDAD Y CONTINUIDAD (010-seguridad-privacidad-continuidad)
+// Auditoría transversal, política de retención y aviso de privacidad.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// RegistroAuditoria — generaliza InspeccionAuditoria a acciones críticas de todo el sistema
+/// (login, cambios de permisos, desactivaciones, purgado por retención). Append-only: el
+/// puerto de repositorio (`RegistroAuditoriaRepositoryPort`) nunca expone `actualizar`/`eliminar`.
+model RegistroAuditoria {
+  id           String   @id @default(uuid())
+  empresaId    String   @map("empresa_id")
+  usuarioId    String   @map("usuario_id")
+  accion       String   @db.VarChar(50)
+  entidadTipo  String   @map("entidad_tipo") @db.VarChar(50)
+  entidadId    String   @map("entidad_id")
+  valorAntes   Json?    @map("valor_antes")
+  valorDespues Json?    @map("valor_despues")
+  ip           String?  @db.VarChar(45)
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id])
+
+  @@index([empresaId, accion, creadoEn(sort: Desc)])
+  @@index([usuarioId])
+  @@index([entidadTipo, entidadId])
+  @@map("registro_auditoria")
+}
+
+/// PoliticaRetencion — cuánto tiempo se conserva cada tipo de dato antes de anonimizar/eliminar.
+/// Una fila por (empresaId, tipoDato); ver seed `politica-retencion-demo.ts` para valores de ejemplo.
+model PoliticaRetencion {
+  id              String   @id @default(uuid())
+  empresaId       String   @map("empresa_id")
+  tipoDato        String   @map("tipo_dato") @db.VarChar(30)
+  mesesRetencion  Int      @map("meses_retencion")
+  accionAlVencer  String   @map("accion_al_vencer") @db.VarChar(20)
+  actualizadoEn   DateTime @updatedAt @map("actualizado_en")
+
+  @@unique([empresaId, tipoDato])
+  @@map("politica_retencion")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO: INTEGRACIONES Y DATOS MASIVOS (009-integraciones-datos-masivos)
+// Solo HU-1/HU-2 (importación masiva de Cliente/Sucursal) — HU-3 (API keys +
+// verificación pública) queda pospuesta: depende de codigoVerificacion/
+// fechaVencimiento (005, pausado) y del portal /verificar/[codigo] (006, sin
+// código todavía). Decisión del usuario 2026-07-21, ver memoria/decisiones.md.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoImportacion {
+  CLIENTE
+  SUCURSAL
+}
+
+/// ImportacionLote — trazabilidad de cada carga masiva de Cliente/Sucursal.
+model ImportacionLote {
+  id             String           @id @default(uuid())
+  tipo           TipoImportacion
+  archivoNombre  String           @map("archivo_nombre") @db.VarChar(255)
+  totalFilas     Int              @map("total_filas")
+  filasExitosas  Int              @map("filas_exitosas")
+  filasConError  Int              @map("filas_con_error")
+  detalleErrores Json?            @map("detalle_errores")
+  creadoPorId    String           @map("creado_por_id")
+  creadoEn       DateTime         @default(now()) @map("creado_en")
+  empresaId      String           @map("empresa_id")
+
+  creadoPor Usuario @relation(fields: [creadoPorId], references: [id])
+
+  @@index([empresaId, tipo, creadoEn])
+  @@map("importacion_lote")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MÓDULO: REPORTES Y ANALYTICS (008-reportes-analytics)
+// Reportes agregados (consolidado por cliente / comparativo entre sucursales),
+// exportables a Excel/PDF, con historial de generación.
+// ═══════════════════════════════════════════════════════════════════════════
+
+enum TipoReporte {
+  CONSOLIDADO_CLIENTE
+  COMPARATIVO_SUCURSALES
+}
+
+enum FormatoReporte {
+  EXCEL
+  PDF
+}
+
+/// ReporteGenerado — archivo exportable (Excel/PDF) ya calculado y guardado.
+/// No se recalcula al abrir el historial; cada generación crea una fila nueva (nunca se borra).
+model ReporteGenerado {
+  id            String         @id @default(uuid())
+  empresaId     String         @map("empresa_id")
+  tipo          TipoReporte
+  filtros       Json           // snapshot: clienteId, sucursalIds?, fechaDesde, fechaHasta
+  formato       FormatoReporte
+  url           String         // ubicación en Supabase Storage (o filesystem local en modo LOCAL)
+  generadoPorId String         @map("generado_por_id")
+  creadoEn      DateTime       @default(now()) @map("creado_en")
+
+  generadoPor Usuario @relation(fields: [generadoPorId], references: [id])
+
+  @@index([empresaId, creadoEn(sort: Desc)])
+  @@index([empresaId, tipo])
+  @@map("reporte_generado")
+}
+
+/// AvisoPrivacidad — constancia de bajo qué base legal se tratan los datos de contacto de un
+/// Cliente/Sucursal (los ingresa un administrador, no el titular). No es un consentimiento firmado.
+model AvisoPrivacidad {
+  id              String   @id @default(uuid())
+  entidadTipo     String   @map("entidad_tipo") @db.VarChar(20)
+  entidadId       String   @map("entidad_id")
+  baseLegal       String   @map("base_legal")
+  registradoPorId String   @map("registrado_por_id")
+  empresaId       String   @map("empresa_id")
+  creadoEn        DateTime @default(now()) @map("creado_en")
+
+  registradoPor Usuario @relation(fields: [registradoPorId], references: [id])
+
+  @@index([entidadTipo, entidadId])
+  @@map("aviso_privacidad")
 }

@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useState } from "react";
 import type { Plantilla } from "../_servicios/inspeccion.servicio";
 import { BadgeTipo } from "./badge-tipo";
+import { BadgeEstadoAprobacion } from "./badge-estado-aprobacion";
 
 interface Props {
   plantillas: Plantilla[];
@@ -36,6 +37,7 @@ export function TablaPlantillas({ plantillas, onToggleEstado, onClonar }: Props)
               <th className="px-4 py-4 text-left font-medium text-dark-4 dark:text-dark-6 uppercase text-body-xs tracking-wide">Tipo</th>
               <th className="px-4 py-4 text-center font-medium text-dark-4 dark:text-dark-6 uppercase text-body-xs tracking-wide">Puntaje</th>
               <th className="px-4 py-4 text-center font-medium text-dark-4 dark:text-dark-6 uppercase text-body-xs tracking-wide">Estado</th>
+              <th className="px-4 py-4 text-center font-medium text-dark-4 dark:text-dark-6 uppercase text-body-xs tracking-wide">Aprobación</th>
               <th className="px-4 py-4 text-center font-medium text-dark-4 dark:text-dark-6 uppercase text-body-xs tracking-wide">Versión</th>
               <th className="px-6 py-4 text-right font-medium text-dark-4 dark:text-dark-6 uppercase text-body-xs tracking-wide">Acciones</th>
             </tr>
@@ -73,6 +75,9 @@ export function TablaPlantillas({ plantillas, onToggleEstado, onClonar }: Props)
                     {p.activa ? "Activa" : "Inactiva"}
                   </button>
                 </td>
+                <td className="px-4 py-4 text-center">
+                  <BadgeEstadoAprobacion estado={p.estadoAprobacion} comentarioResolucion={p.comentarioResolucion} />
+                </td>
                 <td className="px-4 py-4 text-center text-dark-4 dark:text-dark-6">v{p.version}</td>
                 <td className="px-6 py-4">
                   <div className="flex items-center justify-end gap-2">
@@ -83,10 +88,11 @@ export function TablaPlantillas({ plantillas, onToggleEstado, onClonar }: Props)
                       Editar
                     </Link>
                     <Link
-                      href={`/inspecciones/${p.id}/ejecutar`}
+                      href="/certificaciones/nueva"
+                      title="El flujo de certificación (015-wizard-certificacion) usa la plantilla vigente automáticamente"
                       className="rounded-lg bg-green-light-7 px-3 py-1.5 text-body-xs font-medium text-green-dark hover:bg-green-light-6 transition-colors"
                     >
-                      Inspeccionar
+                      Certificar
                     </Link>
                     <button
                       onClick={() => { setClonandoId(p.id); onClonar(p.id); }}

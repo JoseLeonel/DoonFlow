@@ -1,15 +1,22 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { ROLES_SISTEMA } from "@doonflow/shared";
+import { sembrarPlantillaBPM } from "./seeds/plantilla-bpm";
+import { sembrarSucursalesDemo } from "./seeds/sucursales-demo";
+import { sembrarUsuariosDemo } from "./seeds/usuarios-demo";
+import { sembrarPermisosGobernanza } from "./seeds/permisos-gobernanza";
+import { sembrarPoliticaRetencionDemo } from "./seeds/politica-retencion-demo";
 
 const prisma = new PrismaClient();
 
 const DESCRIPCION_ROL: Record<string, string> = {
-  administrador:   "Acceso total a la empresa y su configuración.",
-  productor:       "Gestiona fincas, lotes, cultivos e inventario propio.",
-  operario:        "Registra operaciones de campo y movimientos de inventario.",
-  auditor:         "Acceso de solo lectura para revisión y trazabilidad.",
-  cliente_externo: "Acceso limitado a trazabilidad de sus propios pedidos.",
+  administrador:          "Acceso total a la empresa y su configuración.",
+  productor:              "Gestiona fincas, lotes, cultivos e inventario propio.",
+  operario:               "Registra operaciones de campo y movimientos de inventario.",
+  auditor:                "Acceso de solo lectura para revisión y trazabilidad.",
+  cliente_externo:        "Acceso limitado a trazabilidad de sus propios pedidos.",
+  administrador_cliente:  "Ve únicamente su propio Cliente: sucursales, certificaciones, historial y observaciones de mejora continua.",
+  usuario_sucursal:       "Ve únicamente su(s) sucursal(es) asignada(s): certificación vigente e historial.",
 };
 
 async function main() {
@@ -47,6 +54,22 @@ async function main() {
     },
   });
   console.log("✓ Usuario demo creado:", usuario.email);
+
+  // Plantillas precargadas
+  await sembrarPlantillaBPM(prisma);
+
+  // Clientes y sucursales demo
+  await sembrarSucursalesDemo(prisma, empresaDemo.id);
+
+  // Usuarios demo de alcance (administrador_cliente, usuario_sucursal)
+  await sembrarUsuariosDemo(prisma, empresaDemo.id);
+
+  // Catálogo de permisos de 007-gobernanza-permisos-aprobacion
+  await sembrarPermisosGobernanza(prisma);
+
+  // Política de retención demo de 010-seguridad-privacidad-continuidad
+  await sembrarPoliticaRetencionDemo(prisma, empresaDemo.id);
+
   console.log("");
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   console.log("  Credenciales de acceso (modo local)");

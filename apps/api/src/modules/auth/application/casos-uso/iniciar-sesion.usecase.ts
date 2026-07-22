@@ -7,6 +7,7 @@ import {
 import type { ProveedorAuthPort } from "../../domain/proveedor-auth.port";
 import type { UsuarioRepositoryPort } from "../../domain/usuario.repository.port";
 import type { IniciarSesionInput } from "../auth.schema";
+import type { RegistradorEventoAuditoria } from "../../../../shared/auditoria/registrar-evento-auditoria";
 
 export interface ResultadoIniciarSesion {
   usuario: UsuarioConRol;
@@ -16,11 +17,14 @@ export interface ResultadoIniciarSesion {
 /**
  * Caso de uso: iniciar sesión.
  * Orquesta el dominio a través de puertos — no conoce Express, Prisma ni Supabase directamente.
+ * `registrarEventoAuditoria` es opcional para no romper los tests existentes que no lo mockean
+ * (010-seguridad-privacidad-continuidad, HU-5) — cuando se pasa, registra `LOGIN`/`LOGIN_FALLIDO`.
  */
 export class IniciarSesionUseCase {
   constructor(
     private readonly proveedorAuth: ProveedorAuthPort,
     private readonly usuarioRepository: UsuarioRepositoryPort,
+    private readonly registrarEventoAuditoria?: RegistradorEventoAuditoria,
   ) {}
 
   async ejecutar(input: IniciarSesionInput): Promise<ResultadoIniciarSesion> {
@@ -30,6 +34,7 @@ export class IniciarSesionUseCase {
     );
 
     if (!credenciales) {
+      await this.auditar("LOGIN_FALLIDO", null, input.email);
       throw new CredencialesInvalidasError();
     }
 
@@ -42,9 +47,22 @@ export class IniciarSesionUseCase {
     }
 
     if (!puedeIniciarSesion(usuario)) {
+      await this.auditar("LOGIN_FALLIDO", usuario, input.email);
       throw new UsuarioInactivoError();
     }
 
+    await this.auditar("LOGIN", usuario, input.email);
     return { usuario, tokenAcceso: credenciales.tokenAcceso };
+  }
+
+  private async auditar(accion: "LOGIN" | "LOGIN_FALLIDO", usuario: UsuarioConRol | null, email: string) {
+    if (!this.registrarEventoAuditoria) return;
+    await this.registrarEventoAuditoria({
+      empresaId: usuario?.empresaId ?? "desconocida",
+      usuarioId: usuario?.id ?? "desconocido",
+      accion,
+      entidadTipo: "usuario",
+      entidadId: usuario?.id ?? email,
+    });
   }
 }

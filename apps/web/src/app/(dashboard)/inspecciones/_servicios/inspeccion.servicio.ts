@@ -1,7 +1,26 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000";
+import type {
+  Plantilla,
+  PlantillaCompleta,
+  NodoArbol,
+  RangoResultado,
+  ListaPlantillas,
+} from "@doonflow/shared";
+
+export type {
+  Plantilla,
+  PlantillaCompleta,
+  NodoArbol,
+  RangoResultado,
+  ListaPlantillas,
+  TipoNodo,
+  TipoRespuesta,
+  ModalidadPuntaje,
+  ReglaComentario,
+  NodoOpcion,
+} from "@doonflow/shared";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`/api/inspeccion${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", ...init?.headers },
   });
@@ -10,120 +29,153 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   return json.data as T;
 }
 
-/** Obtiene el token JWT de la cookie a través de un endpoint de la app. */
-async function conToken(init?: RequestInit): Promise<RequestInit> {
-  // El token está en cookie httpOnly — se adjunta automáticamente en fetch del mismo origen.
-  // Para llamadas server-side desde el Route Handler, usar el header de la petición entrante.
-  return init ?? {};
-}
-
 // ── Plantillas ───────────────────────────────────────────────────────────────
 
-export interface Plantilla {
-  id: string; nombre: string; descripcion?: string; tipo: string;
-  activa: boolean; puntajeMaximo: number; fechaVigencia?: string;
-  observaciones?: string; version: number; creadoEn: string;
-}
-
-export interface PlantillaCompleta extends Plantilla {
-  apartados: Apartado[];
-  rangosResultado: RangoResultado[];
-}
-
-export interface Apartado {
-  id: string; codigo: string; nombre: string; orden: number;
-  puntajeMaximo: number; activo: boolean; subapartados: Subapartado[];
-}
-
-export interface Subapartado {
-  id: string; codigo: string; nombre: string; orden: number;
-  activo: boolean; preguntas: Pregunta[];
-}
-
-export interface Pregunta {
-  id: string; codigo: string; descripcion: string; orden: number;
-  tipoRespuesta: string; modalidadPuntaje: string; puntajeMaximo: number;
-  reglaComentario: string; evidenciaObligatoria: boolean;
-  evidenciaMinima: number; evidenciaMaxima: number; activo: boolean;
-  opciones: OpcionRespuesta[];
-}
-
-export interface OpcionRespuesta {
-  id: string; etiqueta: string; valor: string; puntaje: number; orden: number;
-}
-
-export interface RangoResultado {
-  id: string; desde: number; hasta: number; clasificacion: string;
-  color: string; orden: number;
-}
-
-export interface ListaPlantillas {
-  items: Plantilla[]; total: number; pagina: number; porPagina: number;
-}
-
-export async function listarPlantillas(token: string, activa?: boolean): Promise<ListaPlantillas> {
+export async function listarPlantillas(activa?: boolean): Promise<ListaPlantillas> {
   const params = activa !== undefined ? `?activa=${activa}` : "";
-  const res = await fetch(`${API}/inspeccion/plantillas${params}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+  const res = await fetch(`/api/inspeccion/plantillas${params}`);
   const json = await res.json();
-  return { ...json.meta, items: json.data };
+  return {
+    items: json.data ?? [],
+    total: json.meta?.total ?? 0,
+    pagina: json.meta?.pagina ?? 1,
+    porPagina: json.meta?.porPagina ?? 20,
+  };
 }
 
-export async function obtenerPlantillaCompleta(token: string, id: string): Promise<PlantillaCompleta> {
-  const res = await fetch(`${API}/inspeccion/plantillas/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.mensaje ?? "Error");
-  return json.data;
+export async function obtenerPlantillaCompleta(id: string): Promise<PlantillaCompleta> {
+  return apiFetch<PlantillaCompleta>(`/plantillas/${id}`);
 }
 
-export async function crearPlantilla(token: string, datos: {
-  nombre: string; descripcion?: string; tipo: string;
-  puntajeMaximo?: number; observaciones?: string;
-}): Promise<Plantilla> {
-  const res = await fetch(`${API}/inspeccion/plantillas`, {
+export interface DatosCrearPlantilla {
+  nombre: string;
+  descripcion?: string;
+  tipo: string;
+  puntajeMaximo?: number;
+  fechaVigencia?: string;
+  observaciones?: string;
+}
+
+export async function crearPlantilla(datos: DatosCrearPlantilla): Promise<Plantilla> {
+  return apiFetch<Plantilla>("/plantillas", {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify(datos),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.mensaje ?? "Error");
-  return json.data;
 }
 
-export async function toggleEstadoPlantilla(token: string, id: string, activar: boolean) {
-  const accion = activar ? "activar" : "desactivar";
-  const res = await fetch(`${API}/inspeccion/plantillas/${id}/${accion}`, {
-    method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+export async function actualizarPlantilla(
+  id: string,
+  datos: Partial<DatosCrearPlantilla>,
+): Promise<Plantilla> {
+  return apiFetch<Plantilla>(`/plantillas/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(datos),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.mensaje ?? "Error");
-  return json.data;
 }
 
-export async function clonarPlantilla(token: string, id: string, nombre: string) {
-  const res = await fetch(`${API}/inspeccion/plantillas/${id}/clonar`, {
+export async function toggleEstadoPlantilla(id: string, activar: boolean): Promise<Plantilla> {
+  const accion = activar ? "activar" : "desactivar";
+  return apiFetch<Plantilla>(`/plantillas/${id}/${accion}`, { method: "POST" });
+}
+
+export async function eliminarPlantilla(id: string): Promise<void> {
+  await fetch(`/api/inspeccion/plantillas/${id}`, { method: "DELETE" });
+}
+
+export async function clonarPlantilla(id: string, nombre: string): Promise<Plantilla> {
+  return apiFetch<Plantilla>(`/plantillas/${id}/clonar`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     body: JSON.stringify({ nombre }),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.mensaje ?? "Error");
-  return json.data;
 }
 
-export async function agregarApartado(token: string, plantillaId: string, datos: {
-  codigo: string; nombre: string; orden: number; puntajeMaximo: number;
-}): Promise<Apartado> {
-  const res = await fetch(`${API}/inspeccion/plantillas/${plantillaId}/apartados`, {
+// ── Aprobación (007-gobernanza-permisos-aprobacion) ─────────────────────────
+
+export async function enviarRevisionPlantilla(id: string): Promise<Plantilla> {
+  return apiFetch<Plantilla>(`/plantillas/${id}/enviar-revision`, { method: "POST" });
+}
+
+export async function aprobarPlantilla(id: string): Promise<Plantilla> {
+  return apiFetch<Plantilla>(`/plantillas/${id}/aprobar`, { method: "POST" });
+}
+
+export async function rechazarPlantilla(id: string, comentario: string): Promise<Plantilla> {
+  return apiFetch<Plantilla>(`/plantillas/${id}/rechazar`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ comentario }),
+  });
+}
+
+export async function listarPendientesAprobacion(pagina = 1, porPagina = 20): Promise<ListaPlantillas> {
+  const res = await fetch(`/api/inspeccion/plantillas/pendientes-aprobacion?pagina=${pagina}&porPagina=${porPagina}`);
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.error?.mensaje ?? "Error en la API");
+  return {
+    items: json.data ?? [],
+    total: json.meta?.total ?? 0,
+    pagina: json.meta?.pagina ?? pagina,
+    porPagina: json.meta?.porPagina ?? porPagina,
+  };
+}
+
+// ── Nodos ────────────────────────────────────────────────────────────────────
+
+export interface DatosCrearNodo {
+  padreId?: string;
+  tipo: "PANEL" | "PREGUNTA";
+  codigo: string;
+  titulo: string;
+  criterio?: string;
+  orden?: number;
+  tipoRespuesta?: string;
+  modalidadPuntaje?: string;
+  puntajeMaximo?: number;
+  reglaComentario?: string;
+  evidenciaObligatoria?: boolean;
+  evidenciaMinima?: number;
+  evidenciaMaxima?: number;
+}
+
+export async function crearNodo(plantillaId: string, datos: DatosCrearNodo): Promise<NodoArbol> {
+  return apiFetch<NodoArbol>(`/plantillas/${plantillaId}/nodos`, {
+    method: "POST",
     body: JSON.stringify(datos),
   });
-  const json = await res.json();
-  if (!res.ok) throw new Error(json?.error?.mensaje ?? "Error");
-  return json.data;
+}
+
+export async function actualizarNodo(
+  plantillaId: string,
+  nodoId: string,
+  datos: Partial<DatosCrearNodo>,
+): Promise<NodoArbol> {
+  return apiFetch<NodoArbol>(`/plantillas/${plantillaId}/nodos/${nodoId}`, {
+    method: "PATCH",
+    body: JSON.stringify(datos),
+  });
+}
+
+export async function eliminarNodo(plantillaId: string, nodoId: string): Promise<void> {
+  await fetch(`/api/inspeccion/plantillas/${plantillaId}/nodos/${nodoId}`, { method: "DELETE" });
+}
+
+export async function reordenarNodos(
+  plantillaId: string,
+  items: { id: string; orden: number }[],
+): Promise<void> {
+  await apiFetch(`/plantillas/${plantillaId}/nodos/reordenar`, {
+    method: "PATCH",
+    body: JSON.stringify({ items }),
+  });
+}
+
+// ── Rangos de resultado ──────────────────────────────────────────────────────
+
+export async function guardarRangos(
+  plantillaId: string,
+  rangos: Omit<RangoResultado, "id">[],
+): Promise<RangoResultado[]> {
+  return apiFetch<RangoResultado[]>(`/plantillas/${plantillaId}/rangos`, {
+    method: "PATCH",
+    body: JSON.stringify({ rangos }),
+  });
 }

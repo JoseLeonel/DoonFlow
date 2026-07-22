@@ -38,6 +38,8 @@ export class LocalAuthAdapter implements ProveedorAuthPort {
       email:     usuario.email,
       rol:       usuario.rol.nombre,
       empresaId: usuario.empresaId,
+      clienteId: usuario.clienteId,
+      sucursalId: usuario.sucursalId,
     };
 
     const tokenAcceso = jwt.sign(payload, this.jwtSecret, {

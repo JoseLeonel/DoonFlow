@@ -1,7 +1,13 @@
 import type { Request, Response, NextFunction } from "express";
 import { respuestaExitosa } from "../../../shared/sobre-respuesta";
 import { ErrorHttp } from "../../../shared/error-http";
-import { PlantillaNoEncontradaError, RangosInvalidosError } from "../domain/inspeccion.errors";
+import {
+  ComentarioResolucionRequeridoError,
+  EstadoAprobacionInvalidoError,
+  PlantillaNoEncontradaError,
+  PlantillaSinPreguntasError,
+  RangosInvalidosError,
+} from "../domain/inspeccion.errors";
 import { crearPlantillaSchema, actualizarPlantillaSchema, crearNodoSchema, actualizarNodoSchema, reordenarSchema } from "../application/plantilla.schema";
 import type { GestionarPlantillaUseCase } from "../application/casos-uso/gestionar-plantilla.usecase";
 
@@ -28,8 +34,10 @@ export class PlantillaController {
   };
 
   actualizar = async (req: Request, res: Response, next: NextFunction) => {
-    try { res.json(respuestaExitosa(await this.uc.actualizar(req.params["id"]!, req.usuario!.empresaId, actualizarPlantillaSchema.parse(req.body)))); }
-    catch (e) { next(this.m(e)); }
+    try {
+      const input = actualizarPlantillaSchema.parse(req.body);
+      res.json(respuestaExitosa(await this.uc.actualizar(req.params["id"]!, req.usuario!.empresaId, req.usuario!.id, input)));
+    } catch (e) { next(this.m(e)); }
   };
 
   activar    = async (req: Request, res: Response, next: NextFunction) => { try { res.json(respuestaExitosa(await this.uc.activar(req.params["id"]!, req.usuario!.empresaId, req.usuario!.id))); } catch (e) { next(this.m(e)); } };
@@ -57,7 +65,8 @@ export class PlantillaController {
   actualizarNodo = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = actualizarNodoSchema.parse(req.body);
-      res.json(respuestaExitosa(await this.uc.actualizarNodo(req.params["nodoId"]!, req.usuario!.empresaId, input)));
+      const resultado = await this.uc.actualizarNodo(req.params["id"]!, req.params["nodoId"]!, req.usuario!.empresaId, req.usuario!.id, input);
+      res.json(respuestaExitosa(resultado));
     } catch (e) { next(this.m(e)); }
   };
 
@@ -74,9 +83,49 @@ export class PlantillaController {
     } catch (e) { next(this.m(e)); }
   };
 
+  guardarRangos = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { rangos } = req.body as { rangos?: unknown[] };
+      if (!Array.isArray(rangos)) throw new ErrorHttp(400, "rangos_requeridos", "Se requiere un array 'rangos'.");
+      const resultado = await this.uc.guardarRangos(req.params["id"]!, req.usuario!.empresaId, rangos as any);
+      res.json(respuestaExitosa(resultado));
+    } catch (e) { next(this.m(e)); }
+  };
+
+  // ── Aprobación (007-gobernanza-permisos-aprobacion) ────────────────────────
+
+  enviarRevision = async (req: Request, res: Response, next: NextFunction) => {
+    try { res.json(respuestaExitosa(await this.uc.enviarARevision(req.params["id"]!, req.usuario!.empresaId, req.usuario!.id))); }
+    catch (e) { next(this.m(e)); }
+  };
+
+  aprobar = async (req: Request, res: Response, next: NextFunction) => {
+    try { res.json(respuestaExitosa(await this.uc.aprobar(req.params["id"]!, req.usuario!.empresaId, req.usuario!.id))); }
+    catch (e) { next(this.m(e)); }
+  };
+
+  rechazar = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { comentario } = req.body as { comentario?: string };
+      if (!comentario?.trim()) throw new ErrorHttp(400, "comentario_resolucion_requerido", "Debes indicar un comentario para rechazar la plantilla.");
+      res.json(respuestaExitosa(await this.uc.rechazar(req.params["id"]!, req.usuario!.empresaId, req.usuario!.id, comentario)));
+    } catch (e) { next(this.m(e)); }
+  };
+
+  listarPendientesAprobacion = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const { empresaId } = req.usuario!;
+      const r = await this.uc.listarPendientesAprobacion(empresaId, Number(req.query["pagina"] ?? 1), Number(req.query["porPagina"] ?? 20));
+      res.json(respuestaExitosa(r.items, { pagina: r.pagina, porPagina: r.porPagina, total: r.total }));
+    } catch (e) { next(this.m(e)); }
+  };
+
   private m(e: unknown) {
-    if (e instanceof PlantillaNoEncontradaError) return new ErrorHttp(404, "plantilla_no_encontrada", e.message);
-    if (e instanceof RangosInvalidosError)       return new ErrorHttp(422, "rangos_invalidos", e.message);
+    if (e instanceof PlantillaNoEncontradaError)         return new ErrorHttp(404, "plantilla_no_encontrada", e.message);
+    if (e instanceof RangosInvalidosError)               return new ErrorHttp(422, "rangos_invalidos", e.message);
+    if (e instanceof PlantillaSinPreguntasError)         return new ErrorHttp(422, "plantilla_sin_preguntas", e.message);
+    if (e instanceof EstadoAprobacionInvalidoError)      return new ErrorHttp(422, "estado_aprobacion_invalido", e.message);
+    if (e instanceof ComentarioResolucionRequeridoError) return new ErrorHttp(400, "comentario_resolucion_requerido", e.message);
     return e;
   }
 }

@@ -52,6 +52,10 @@ const doonflowPreset: Pick<Config, "darkMode" | "theme"> = {
           dark: { DEFAULT: "#F59E0B" },
           light: { DEFAULT: "#FCD34D" },
         },
+        naranja: {
+          DEFAULT: "#FD7E14",
+          light: "#FFF1E6",
+        },
       },
       fontSize: {
         "heading-1": ["60px", "72px"],

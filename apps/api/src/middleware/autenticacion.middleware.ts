@@ -2,13 +2,14 @@ import type { NextFunction, Request, Response } from "express";
 import type { PrismaClient } from "@prisma/client";
 import jwt from "jsonwebtoken";
 import { ErrorHttp } from "../shared/error-http";
-import type { UsuarioConRol } from "../modules/auth/domain/usuario.entity";
+import type { AlcanceUsuario, UsuarioConRol } from "../modules/auth/domain/usuario.entity";
 
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace Express {
     interface Request {
       usuario?: UsuarioConRol;
+      alcance?: AlcanceUsuario;
     }
   }
 }
@@ -42,8 +43,11 @@ export function crearMiddlewareAutenticacion(prisma: PrismaClient) {
       let payload: PayloadJwt;
       try {
         payload = jwt.verify(token, secret) as PayloadJwt;
-      } catch {
-        throw new ErrorHttp(401, "token_invalido", "Token de acceso inválido o expirado.");
+      } catch (error) {
+        if (error instanceof jwt.TokenExpiredError) {
+          throw new ErrorHttp(401, "sesion_expirada", "Tu sesión expiró, inicia sesión nuevamente.");
+        }
+        throw new ErrorHttp(401, "token_invalido", "Token de acceso inválido.");
       }
 
       const usuario = await prisma.usuario.findUnique({
@@ -63,6 +67,8 @@ export function crearMiddlewareAutenticacion(prisma: PrismaClient) {
         nombre:      usuario.nombre,
         rol:         usuario.rol.nombre as UsuarioConRol["rol"],
         activo:      usuario.activo,
+        clienteId:   usuario.clienteId ?? null,
+        sucursalId:  usuario.sucursalId ?? null,
       };
 
       next();
