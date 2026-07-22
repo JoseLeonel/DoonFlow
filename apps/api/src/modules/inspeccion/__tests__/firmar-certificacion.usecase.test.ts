@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Mock } from "vitest";
 import { FirmarCertificacionUseCase } from "../application/casos-uso/firmar-certificacion.usecase";
 import {
+  CertificacionConHallazgoCriticoError,
   CertificacionNoEditableError,
   InspeccionNoEncontradaError,
   SincronizacionPendienteError,
@@ -9,6 +10,7 @@ import {
 import type { CertificacionRepositoryPort } from "../domain/certificacion.repository.port";
 import type { GeneradorPdfCertificacionPort } from "../domain/generador-pdf-certificacion.port";
 import type { AlmacenamientoEvidenciasPort } from "../domain/almacenamiento-evidencias.port";
+import type { HallazgoRepositoryPort } from "../domain/hallazgo.repository.port";
 import type { Certificacion } from "../domain/certificacion.entity";
 
 function certificacionCompleta(parcial: Partial<Certificacion> = {}) {
@@ -104,5 +106,40 @@ describe("FirmarCertificacionUseCase", () => {
 
     await expect(uc.ejecutar("cert1", "e1", "u1", { pendientesSincronizacion: 0 })).rejects.toThrow("certificacion_no_editable");
     expect(repo.firmar).toHaveBeenCalledTimes(1);
+  });
+
+  // ── 013-hallazgos-plan-cumplimiento ──────────────────────────────────────
+
+  it("con hallazgo crítico pendiente, sp_inspeccion_firmar rechaza y se traduce a CertificacionConHallazgoCriticoError", async () => {
+    repo.obtenerCompleta.mockResolvedValue(certificacionCompleta());
+    repo.firmar.mockRejectedValue(new Error("hallazgo_critico_pendiente"));
+
+    await expect(uc.ejecutar("cert1", "e1", "u1", { pendientesSincronizacion: 0 })).rejects.toThrow(
+      CertificacionConHallazgoCriticoError,
+    );
+    expect(repo.firmar).toHaveBeenCalledTimes(1);
+  });
+
+  it("con hallazgos MAYOR/MENOR únicamente retorna resultadoFinal APROBADA_CON_OBSERVACIONES e incluye los hallazgos en el PDF", async () => {
+    const hallazgoRepo = {
+      listarPorInspeccion: vi.fn().mockResolvedValue([{ descripcion: "Falta señalización", severidad: "MAYOR" }]),
+    } as unknown as HallazgoRepositoryPort & Record<string, Mock>;
+    uc = new FirmarCertificacionUseCase(repo, generadorPdf, almacenamientoPdf, hallazgoRepo);
+
+    repo.obtenerCompleta.mockResolvedValue(certificacionCompleta());
+    repo.firmar.mockResolvedValue(certificacionCompleta({
+      estado: "FIRMADA", codigoVerificacion: "ABC1234567", firmadoEn: new Date(),
+      fechaVencimiento: new Date(), resultadoFinal: "APROBADA_CON_OBSERVACIONES",
+    }));
+    repo.establecerPdfUrl.mockResolvedValue(certificacionCompleta({
+      estado: "FIRMADA", resultadoFinal: "APROBADA_CON_OBSERVACIONES", pdfUrl: "http://x/certificado.pdf",
+    }));
+
+    const resultado = await uc.ejecutar("cert1", "e1", "u1", { pendientesSincronizacion: 0 });
+
+    expect(resultado.resultadoFinal).toBe("APROBADA_CON_OBSERVACIONES");
+    expect(generadorPdf.generar).toHaveBeenCalledWith(
+      expect.objectContaining({ hallazgos: [{ descripcion: "Falta señalización", severidad: "MAYOR" }] }),
+    );
   });
 });

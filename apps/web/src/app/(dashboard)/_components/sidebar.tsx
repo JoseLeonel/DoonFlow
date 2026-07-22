@@ -140,6 +140,8 @@ const NAV: NavGrupo[] = [
         Icono: IconoCertificacion,
         subItems: [
           { titulo: "Nueva certificación", href: "/certificaciones/nueva" },
+          { titulo: "Mis acciones", href: "/certificaciones/seguimiento" },
+          { titulo: "Verificación", href: "/certificaciones/verificacion" },
         ],
       },
     ],

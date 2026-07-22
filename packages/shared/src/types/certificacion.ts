@@ -83,3 +83,87 @@ export interface ResumenCertificacion {
   clasificacion?: string;
   porSeccion: ResumenSeccionCertificacion[];
 }
+
+// ── Hallazgos y plan de cumplimiento (013-hallazgos-plan-cumplimiento) ─────
+
+export type Severidad = "CRITICA" | "MAYOR" | "MENOR";
+export type EstadoPlan = "EN_SEGUIMIENTO" | "CERRADO" | "REABIERTO";
+export type EstadoAccion = "PENDIENTE" | "EN_PROCESO" | "EN_REVISION" | "CUMPLIDO" | "NO_CUMPLIDO" | "VENCIDO";
+export type ResultadoFinal = "APROBADA" | "APROBADA_CON_OBSERVACIONES" | "RECHAZADA";
+
+export interface HallazgoEvidencia {
+  id: string;
+  tipo: string;
+  url: string;
+  nombre: string;
+  tamanoBytes?: number;
+  creadoEn: string;
+}
+
+export interface Hallazgo {
+  id: string;
+  inspeccionId: string;
+  detalleId?: string | null;
+  descripcion: string;
+  severidad: Severidad;
+  creadoEn: string;
+  evidencias: HallazgoEvidencia[];
+}
+
+export interface AccionCorrectivaEvidencia {
+  id: string;
+  tipo: string;
+  url: string;
+  nombre: string;
+  comentario?: string | null;
+  creadoEn: string;
+}
+
+export interface AccionCorrectiva {
+  id: string;
+  planCumplimientoId: string;
+  hallazgoId: string;
+  descripcion: string;
+  responsableId: string;
+  responsableNombre: string;
+  fechaLimite: string;
+  estado: EstadoAccion;
+  porcentajeAvance: number;
+  verificadoPorId?: string | null;
+  verificadoEn?: string | null;
+  comentarioVerificacion?: string | null;
+  evidencias: AccionCorrectivaEvidencia[];
+}
+
+export interface IndicadoresPlan {
+  total: number;
+  pendientes: number;
+  enProceso: number;
+  enRevision: number;
+  cumplidas: number;
+  noCumplidas: number;
+  vencidas: number;
+  porcentajeCumplimiento: number;
+  proximasAVencer: number;
+}
+
+export interface PlanCumplimiento {
+  id: string;
+  inspeccionId: string;
+  estado: EstadoPlan;
+  cerradoPorId?: string | null;
+  cerradoEn?: string | null;
+  acciones: AccionCorrectiva[];
+  indicadores: IndicadoresPlan;
+}
+
+export type OrigenEvidencia = "RESPUESTA" | "HALLAZGO" | "ACCION_CORRECTIVA";
+
+export interface EvidenciaConsolidada {
+  id: string;
+  origen: OrigenEvidencia;
+  tipo: string;
+  url: string;
+  nombre: string;
+  creadoEn: string;
+}

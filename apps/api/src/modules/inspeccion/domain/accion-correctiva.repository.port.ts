@@ -13,6 +13,8 @@ export interface AccionCorrectivaEvidenciaGuardada {
 
 export interface AccionCorrectivaConEvidencias extends AccionCorrectiva {
   evidencias: AccionCorrectivaEvidenciaGuardada[];
+  /** Nombre del responsable, resuelto server-side para no obligar al frontend a cruzar con el módulo de usuarios. */
+  responsableNombre: string;
 }
 
 /** Acción correctiva con los datos de la certificación de origen necesarios para resolver alcance. */

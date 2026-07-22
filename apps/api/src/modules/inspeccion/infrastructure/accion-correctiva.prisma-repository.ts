@@ -11,6 +11,12 @@ import type {
   DatosVerificarAccion,
 } from "../domain/accion-correctiva.repository.port";
 
+const INCLUIR_BASE = { evidencias: true, responsable: { select: { nombre: true } } } as const;
+const INCLUIR_ORIGEN = {
+  ...INCLUIR_BASE,
+  planCumplimiento: { include: { inspeccion: { include: { sucursal: true } } } },
+} as const;
+
 function mapEvidencia(e: any): AccionCorrectivaEvidenciaGuardada {
   return {
     id: e.id,
@@ -30,6 +36,7 @@ function mapAccion(a: any): AccionCorrectivaConEvidencias {
     hallazgoId: a.hallazgoId,
     descripcion: a.descripcion,
     responsableId: a.responsableId,
+    responsableNombre: a.responsable?.nombre ?? "",
     fechaLimite: a.fechaLimite,
     estado: calcularEstadoEfectivo({ fechaLimite: a.fechaLimite, estado: a.estado }) as AccionCorrectiva["estado"],
     porcentajeAvance: a.porcentajeAvance,
@@ -41,11 +48,6 @@ function mapAccion(a: any): AccionCorrectivaConEvidencias {
     evidencias: (a.evidencias ?? []).map(mapEvidencia),
   };
 }
-
-const INCLUIR_ORIGEN = {
-  evidencias: true,
-  planCumplimiento: { include: { inspeccion: { include: { sucursal: true } } } },
-} as const;
 
 function mapAccionConOrigen(a: any): AccionCorrectivaConOrigen {
   return {
@@ -77,7 +79,7 @@ export class AccionCorrectivaPrismaRepository implements AccionCorrectivaReposit
         responsableId: datos.responsableId,
         fechaLimite: datos.fechaLimite,
       },
-      include: { evidencias: true },
+      include: INCLUIR_BASE,
     });
     return mapAccion(a);
   }
@@ -136,7 +138,7 @@ export class AccionCorrectivaPrismaRepository implements AccionCorrectivaReposit
   async listarPorPlan(planCumplimientoId: string, empresaId: string): Promise<AccionCorrectivaConEvidencias[]> {
     const filas = await this.prisma.accionCorrectiva.findMany({
       where: { planCumplimientoId, planCumplimiento: { inspeccion: { empresaId } } },
-      include: { evidencias: true },
+      include: INCLUIR_BASE,
       orderBy: { creadoEn: "asc" },
     });
     return filas.map(mapAccion);
@@ -145,7 +147,7 @@ export class AccionCorrectivaPrismaRepository implements AccionCorrectivaReposit
   async listarPorResponsable(usuarioId: string, empresaId: string, alcance?: AlcanceConsulta): Promise<AccionCorrectivaConEvidencias[]> {
     const filas = await this.prisma.accionCorrectiva.findMany({
       where: { responsableId: usuarioId, planCumplimiento: { inspeccion: { empresaId } }, ...this.whereAlcance(alcance) },
-      include: { evidencias: true },
+      include: INCLUIR_BASE,
       orderBy: { fechaLimite: "asc" },
     });
     return filas.map(mapAccion);
@@ -154,7 +156,7 @@ export class AccionCorrectivaPrismaRepository implements AccionCorrectivaReposit
   async listarEnRevision(empresaId: string, alcance?: AlcanceConsulta): Promise<AccionCorrectivaConEvidencias[]> {
     const filas = await this.prisma.accionCorrectiva.findMany({
       where: { estado: "EN_REVISION", planCumplimiento: { inspeccion: { empresaId } }, ...this.whereAlcance(alcance) },
-      include: { evidencias: true },
+      include: INCLUIR_BASE,
       orderBy: { fechaLimite: "asc" },
     });
     return filas.map(mapAccion);
@@ -177,7 +179,7 @@ export class AccionCorrectivaPrismaRepository implements AccionCorrectivaReposit
   }
 
   private async recargar(id: string): Promise<AccionCorrectivaConEvidencias> {
-    const a = await this.prisma.accionCorrectiva.findFirstOrThrow({ where: { id }, include: { evidencias: true } });
+    const a = await this.prisma.accionCorrectiva.findFirstOrThrow({ where: { id }, include: INCLUIR_BASE });
     return mapAccion(a);
   }
 }

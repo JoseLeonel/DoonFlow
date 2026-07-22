@@ -14,6 +14,16 @@ vi.mock("../_servicios/certificacion.servicio", () => ({
   firmarCertificacion: (id: string, pendientes: number) => firmarCertificacion(id, pendientes),
 }));
 
+const listarHallazgos = vi.fn();
+vi.mock("../_servicios/hallazgo.servicio", () => ({
+  listarHallazgos: (id: string) => listarHallazgos(id),
+}));
+
+const obtenerPlan = vi.fn();
+vi.mock("../_servicios/plan-cumplimiento.servicio", () => ({
+  obtenerPlan: (id: string) => obtenerPlan(id),
+}));
+
 function certificacionEnProgreso(parcial: Record<string, unknown> = {}) {
   return {
     id: "c1", estado: "EN_PROGRESO", codigoVerificacion: null, pdfUrl: null, firmadoEn: null,
@@ -26,6 +36,10 @@ describe("usarRevisionCertificacion", () => {
     push.mockClear();
     obtenerCertificacion.mockReset();
     obtenerCertificacion.mockResolvedValue(certificacionEnProgreso());
+    listarHallazgos.mockReset();
+    listarHallazgos.mockResolvedValue([]);
+    obtenerPlan.mockReset();
+    obtenerPlan.mockResolvedValue(null);
   });
 
   it("haySeccionesIncompletas es true si alguna sección tiene menos respuestas que preguntas", async () => {
@@ -102,6 +116,49 @@ describe("usarRevisionCertificacion", () => {
     expect(firmarCertificacion).toHaveBeenCalledWith("c1", 0);
     expect(result.current.certificacion?.codigoVerificacion).toBe("ABC123");
     expect(result.current.errorFirma).toBeNull();
+  });
+
+  // ── 013-hallazgos-plan-cumplimiento ────────────────────────────────────
+
+  it("puedeFirmar es false con un hallazgo CRITICA sin ninguna acción cumplida", async () => {
+    obtenerResumenCertificacion.mockResolvedValue({
+      puntajeObtenido: 10, puntajeMaximo: 10, porcentajeCumplimiento: 100, clasificacion: "Aprobado", porSeccion: [],
+    });
+    listarHallazgos.mockResolvedValue([{ id: "h1", severidad: "CRITICA", descripcion: "Extintor vencido", evidencias: [] }]);
+    obtenerPlan.mockResolvedValue(null);
+
+    const { result } = renderHook(() => usarRevisionCertificacion("c1"));
+    await waitFor(() => expect(result.current.cargando).toBe(false));
+
+    expect(result.current.puedeFirmar).toBe(false);
+  });
+
+  it("puedeFirmar es true sin hallazgos críticos (solo MAYOR/MENOR o ninguno)", async () => {
+    obtenerResumenCertificacion.mockResolvedValue({
+      puntajeObtenido: 10, puntajeMaximo: 10, porcentajeCumplimiento: 100, clasificacion: "Aprobado", porSeccion: [],
+    });
+    listarHallazgos.mockResolvedValue([{ id: "h1", severidad: "MENOR", descripcion: "Detalle menor", evidencias: [] }]);
+    obtenerPlan.mockResolvedValue(null);
+
+    const { result } = renderHook(() => usarRevisionCertificacion("c1"));
+    await waitFor(() => expect(result.current.cargando).toBe(false));
+
+    expect(result.current.puedeFirmar).toBe(true);
+  });
+
+  it("puedeFirmar es true con un hallazgo CRITICA que ya tiene una acción CUMPLIDO", async () => {
+    obtenerResumenCertificacion.mockResolvedValue({
+      puntajeObtenido: 10, puntajeMaximo: 10, porcentajeCumplimiento: 100, clasificacion: "Aprobado", porSeccion: [],
+    });
+    listarHallazgos.mockResolvedValue([{ id: "h1", severidad: "CRITICA", descripcion: "Extintor vencido", evidencias: [] }]);
+    obtenerPlan.mockResolvedValue({
+      id: "plan1", acciones: [{ id: "a1", hallazgoId: "h1", estado: "CUMPLIDO" }],
+    });
+
+    const { result } = renderHook(() => usarRevisionCertificacion("c1"));
+    await waitFor(() => expect(result.current.cargando).toBe(false));
+
+    expect(result.current.puedeFirmar).toBe(true);
   });
 
   it("firmar() con error expone el mensaje en errorFirma", async () => {

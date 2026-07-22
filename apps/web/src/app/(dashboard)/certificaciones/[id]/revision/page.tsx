@@ -12,6 +12,7 @@ export default function PaginaRevisionCertificacion() {
   const {
     resumen, certificacion, cargando, error, haySeccionesIncompletas,
     puedeFirmar, firmando, errorFirma, firmar, guardarYFinalizar, volverASeccion,
+    hayHallazgoCriticoSinResolver,
   } = usarRevisionCertificacion(id);
   const capturaOffline = usarCapturaOffline(id);
 
@@ -118,6 +119,14 @@ export default function PaginaRevisionCertificacion() {
           </div>
         ) : (
           <>
+            {hayHallazgoCriticoSinResolver && (
+              <div className="mb-4 rounded-lg bg-red-light-4 px-4 py-2.5 text-body-sm text-red-dark">
+                <p>⚠️ Hay un hallazgo crítico sin resolver — no se puede firmar.</p>
+                <Link href={`/certificaciones/${id}/hallazgos`} className="font-medium underline hover:no-underline">
+                  Ver hallazgos →
+                </Link>
+              </div>
+            )}
             {errorFirma && (
               <p className="mb-4 rounded-lg bg-red-light-4 px-4 py-2.5 text-body-sm text-red-dark">{errorFirma}</p>
             )}

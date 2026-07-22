@@ -24,6 +24,8 @@ const GUARDS_POR_RUTA: { prefijo: string; rolesPermitidos: string[] }[] = [
   { prefijo: "/mantenimientos/usuarios", rolesPermitidos: ["administrador"] },
   { prefijo: "/mi-empresa", rolesPermitidos: ["administrador_cliente"] },
   { prefijo: "/mi-sucursal", rolesPermitidos: ["usuario_sucursal"] },
+  // 013-hallazgos-plan-cumplimiento — regla 4: solo auditor/administrador verifican acciones.
+  { prefijo: "/certificaciones/verificacion", rolesPermitidos: ["administrador", "auditor"] },
 ];
 
 /** Guard de rutas: sin cookie de sesión, redirige a /auth/login. Dueño: agente-auth. */
