@@ -9,11 +9,11 @@
 
 ## Agente: `agente-basededatos`
 
-- [ ] **T-510** Crear migración `add_captura_offline_inspeccion` en `packages/db/prisma/`:
-  - Agregar a la tabla `inspeccion`: `captura_offline BOOLEAN NOT NULL DEFAULT false`, `sincronizado_en TIMESTAMPTZ NULL`.
+- [x] **T-510** Crear migración `add_captura_offline_inspeccion` en `packages/db/prisma/`:
+  - Agregar a la tabla `inspeccion`: `captura_offline BOOLEAN NOT NULL DEFAULT false`, `sincronizado_en TIMESTAMPTZ NULL` (Prisma lo mapea como `TIMESTAMP(3)`, mismo patrón que el resto del schema).
   - Actualizar el model `Inspeccion` en `schema.prisma` con `capturaOffline` y `sincronizadoEn` (camelCase, `@map`).
-- [ ] **T-511** Agregar índice `(empresa_id, captura_offline)` en `inspeccion` — soporta el listado administrativo que filtra certificaciones capturadas offline.
-- [ ] **T-482** Registrar el cambio en `memoria/cambios_db/registro.md`, incluyendo la nota de que `inspeccion_detalle` e `inspeccion_evidencia` **no cambian de esquema**: la idempotencia de sincronización se resuelve a nivel de aplicación reutilizando el upsert por `(inspeccionId, nodoId)` que ya existe desde [[015-wizard-certificacion]] para el guardado incremental en línea.
+- [x] **T-511** Agregar índice `(empresa_id, captura_offline)` en `inspeccion` — soporta el listado administrativo que filtra certificaciones capturadas offline.
+- [x] **T-482** Registrado el cambio en `memoria/cambios_db/registro.md`, incluyendo la nota de que `inspeccion_detalle` e `inspeccion_evidencia` **no cambian de esquema**.
 
 ---
 
