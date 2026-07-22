@@ -5,6 +5,8 @@ import {
   calcularResumen,
   calcularResumenPorSeccion,
   calcularPuntajeRespuesta,
+  generarCodigoVerificacion,
+  calcularFechaVencimiento,
 } from "../domain/certificacion.entity";
 import type { RangoResultado, NodoArbol } from "../domain/plantilla.entity";
 
@@ -44,14 +46,43 @@ describe("puedeEditarRespuestas", () => {
 });
 
 describe("puedeFirmarse", () => {
-  // No hay caso de "certificación ya FIRMADA" — ese estado lo agrega
-  // [[005-certificacion-plan-cumplimiento]] (pausado); `estado` hoy es siempre "EN_PROGRESO".
-  it("retorna true cuando pendientesSincronizacion es 0", () => {
+  it("retorna true cuando estado es EN_PROGRESO y pendientesSincronizacion es 0", () => {
     expect(puedeFirmarse({ estado: "EN_PROGRESO" }, 0)).toBe(true);
   });
 
   it("retorna false cuando pendientesSincronizacion es mayor a 0", () => {
     expect(puedeFirmarse({ estado: "EN_PROGRESO" }, 3)).toBe(false);
+  });
+
+  it("retorna false cuando la certificación ya está FIRMADA, aunque no haya pendientes", () => {
+    expect(puedeFirmarse({ estado: "FIRMADA" }, 0)).toBe(false);
+  });
+});
+
+describe("generarCodigoVerificacion", () => {
+  it("genera un código de 10 caracteres alfanuméricos en mayúscula", () => {
+    const codigo = generarCodigoVerificacion();
+    expect(codigo).toHaveLength(10);
+    expect(codigo).toMatch(/^[A-Z0-9]{10}$/);
+  });
+
+  it("genera códigos distintos en llamadas sucesivas (con probabilidad abrumadora)", () => {
+    const codigos = new Set(Array.from({ length: 20 }, () => generarCodigoVerificacion()));
+    expect(codigos.size).toBeGreaterThan(1);
+  });
+});
+
+describe("calcularFechaVencimiento", () => {
+  it("suma los meses de vigencia por defecto (12) a la fecha de firma", () => {
+    const resultado = calcularFechaVencimiento(new Date("2026-07-21T00:00:00.000Z"), 12);
+    expect(resultado.getUTCFullYear()).toBe(2027);
+    expect(resultado.getUTCMonth()).toBe(6); // julio (0-indexado)
+  });
+
+  it("respeta una vigencia distinta a 12 meses", () => {
+    const resultado = calcularFechaVencimiento(new Date("2026-07-21T00:00:00.000Z"), 6);
+    expect(resultado.getUTCMonth()).toBe(0); // enero 2027
+    expect(resultado.getUTCFullYear()).toBe(2027);
   });
 });
 

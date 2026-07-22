@@ -2,10 +2,11 @@ import { contarPreguntas } from "./plantilla.entity";
 import type { NodoArbol, RangoResultado } from "./plantilla.entity";
 
 /**
- * Certificación (ampliación de `Inspeccion`) — solo los campos de este sprint.
- * Sin campos de firma (`firmadoPorId`, `codigoVerificacion`, `pdfUrl`, etc.) —
- * esos pertenecen a [[005-certificacion-plan-cumplimiento]], pausado.
+ * Certificación (ampliación de `Inspeccion`) — incluye los campos de firma de
+ * [[005-certificacion-plan-cumplimiento]] (retomado 2026-07-21).
  */
+export type EstadoCertificacion = "EN_PROGRESO" | "FIRMADA";
+
 export interface Certificacion {
   id: string;
   empresaId: string;
@@ -14,7 +15,7 @@ export interface Certificacion {
   inspectorId: string;
   sucursalId: string | null;
   periodoEtiqueta: string | null;
-  estado: "EN_PROGRESO";
+  estado: EstadoCertificacion;
   fechaInicio: Date;
   fechaFin: Date | null;
   puntajeObtenido: number;
@@ -26,26 +27,67 @@ export interface Certificacion {
   capturaOffline: boolean;
   /** 012-captura-offline-campo — última vez que un lote de sincronización se procesó sin dejar pendientes. */
   sincronizadoEn: Date | null;
+  /** 005-certificacion-plan-cumplimiento — quién/cuándo firmó. `null` mientras está en borrador. */
+  firmadoPorId: string | null;
+  firmadoEn: Date | null;
+  /** 005-certificacion-plan-cumplimiento — único en todo el sistema, no solo por empresa. */
+  codigoVerificacion: string | null;
+  pdfUrl: string | null;
+  fechaVencimiento: Date | null;
+  /** 005-certificacion-plan-cumplimiento — fijo en `APROBADA` hasta que 013 calcule el valor real por severidad. */
+  resultadoFinal: string | null;
   creadoEn: Date;
   actualizadoEn: Date;
 }
 
 /**
- * Indica si la certificación puede firmarse — requiere estar en línea con todo
- * sincronizado (regla de negocio 1 de [[012-captura-offline-campo]]). La firma en sí
- * (`estado → FIRMADA`) la agrega [[005-certificacion-plan-cumplimiento]], pausado — esta
- * función existe ya para que 005 la reutilice sin cambiarla al implementarse.
+ * Indica si la certificación puede firmarse — requiere estar `EN_PROGRESO` (no firmada ya)
+ * y estar en línea con todo sincronizado (regla de negocio 1 de [[012-captura-offline-campo]]).
  *
- * @param certificacion - Certificación con su `estado` actual (se usa la misma forma
- *   mínima que `puedeEditarRespuestas`, para no acoplarse a campos de 005 inexistentes).
+ * @param certificacion - Certificación con su `estado` actual.
  * @param pendientesSincronizacion - Cantidad de respuestas/evidencias sin sincronizar.
- * @returns `false` si hay algo pendiente de sincronizar; `true` en caso contrario.
+ * @returns `false` si ya está firmada o si hay algo pendiente de sincronizar.
  * @example
  *   puedeFirmarse({ estado: "EN_PROGRESO" }, 0)  // → true
  *   puedeFirmarse({ estado: "EN_PROGRESO" }, 3)  // → false
+ *   puedeFirmarse({ estado: "FIRMADA" }, 0)      // → false
  */
 export function puedeFirmarse(certificacion: { estado: string }, pendientesSincronizacion: number): boolean {
-  return pendientesSincronizacion === 0;
+  return certificacion.estado === "EN_PROGRESO" && pendientesSincronizacion === 0;
+}
+
+const CARACTERES_CODIGO_VERIFICACION = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+
+/**
+ * Genera un candidato de código de verificación (10 caracteres alfanuméricos en mayúscula).
+ * No garantiza unicidad por sí solo — el caso de uso reintenta con un candidato nuevo si
+ * `sp_inspeccion_firmar` reporta colisión (columna única en toda la tabla `inspeccion`).
+ *
+ * @returns Código de 10 caracteres, ej. `"A1B2C3D4E5"`.
+ * @example
+ *   generarCodigoVerificacion().length  // → 10
+ */
+export function generarCodigoVerificacion(): string {
+  let codigo = "";
+  for (let i = 0; i < 10; i++) {
+    codigo += CARACTERES_CODIGO_VERIFICACION[Math.floor(Math.random() * CARACTERES_CODIGO_VERIFICACION.length)];
+  }
+  return codigo;
+}
+
+/**
+ * Calcula la fecha de vencimiento de la certificación a partir de la fecha de firma.
+ *
+ * @param firmadoEn - Fecha/hora en que se firmó la certificación.
+ * @param meses - Meses de vigencia (default 12).
+ * @returns Fecha de vencimiento.
+ * @example
+ *   calcularFechaVencimiento(new Date("2026-07-21"), 12)  // → 2027-07-21
+ */
+export function calcularFechaVencimiento(firmadoEn: Date, meses = 12): Date {
+  const fecha = new Date(firmadoEn);
+  fecha.setMonth(fecha.getMonth() + meses);
+  return fecha;
 }
 
 /**

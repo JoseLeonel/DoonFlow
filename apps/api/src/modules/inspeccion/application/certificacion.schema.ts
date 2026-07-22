@@ -36,3 +36,14 @@ export const sincronizarLoteSchema = z.object({
 });
 
 export type SincronizarLoteInput = z.infer<typeof sincronizarLoteSchema>;
+
+// ── Firma de certificación (005-certificacion-plan-cumplimiento, retomado) ─
+
+export const firmarCertificacionSchema = z.object({
+  comentarioFirma: z.string().max(2000).nullable().optional(),
+  /** Enviado por el cliente desde su cola local de sincronización (IndexedDB) — el servidor
+   * no puede contar pendientes de forma confiable, ver `SincronizarCapturaOfflineUseCase.obtenerEstado`. */
+  pendientesSincronizacion: z.number().int().min(0).optional().default(0),
+});
+
+export type FirmarCertificacionInput = z.infer<typeof firmarCertificacionSchema>;

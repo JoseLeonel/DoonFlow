@@ -144,3 +144,20 @@ export interface EstadoSincronizacion {
 export async function obtenerEstadoSincronizacion(certificacionId: string): Promise<EstadoSincronizacion> {
   return apiFetch<EstadoSincronizacion>(`/certificaciones/${certificacionId}/sincronizacion/estado`);
 }
+
+// ── Firma (005-certificacion-plan-cumplimiento, retomado) ──────────────────
+
+export async function firmarCertificacion(
+  certificacionId: string,
+  pendientesSincronizacion: number,
+  comentarioFirma?: string,
+): Promise<Certificacion> {
+  return apiFetch<Certificacion>(`/certificaciones/${certificacionId}/firmar`, {
+    method: "POST",
+    body: JSON.stringify({ pendientesSincronizacion, comentarioFirma: comentarioFirma ?? null }),
+  });
+}
+
+export async function obtenerPdfCertificacion(certificacionId: string): Promise<{ url: string }> {
+  return apiFetch<{ url: string }>(`/certificaciones/${certificacionId}/pdf`);
+}

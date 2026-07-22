@@ -1,91 +1,42 @@
-# Guía de implementación — 005-certificacion-plan-cumplimiento (⏸️ PAUSADO)
+# Guía de implementación — 005-certificacion-plan-cumplimiento
 
-> No implementar sin decisión explícita del usuario (pausado 2026-07-16). Queda como referencia técnica de diseño para cuando se retome la firma digital.
-
----
-
-## Decisiones tomadas (referencia)
-
-1. **Generación del PDF**: renderizado server-side con **Puppeteer** (HTML → PDF) en `infrastructure/pdf-certificacion.adapter.ts`, ejecutado de forma síncrona dentro de `firmar-certificacion.usecase.ts` inmediatamente después de que el SP confirma la firma. Se sube a Supabase Storage con la convención de ruta `certificaciones/{empresaId}/{inspeccionId}/certificado.pdf`. Se elige Puppeteer (no un servicio externo) para no introducir una dependencia de infraestructura nueva; si el volumen de firmas concurrentes lo justifica más adelante, mover la generación a un job asíncrono es una decisión de `agente-produccion`.
-2. **`resultadoFinal` en la primera versión**: como no existiría todavía el concepto de `Hallazgo` (013 depende de este sprint), `sp_inspeccion_firmar` fijaría `resultado_final = 'APROBADA'` de forma incondicional al firmar. [[013-hallazgos-plan-cumplimiento]] reemplazaría el SP para calcular el valor real según severidad (regla 1.1).
+> Retomado e implementado el 2026-07-21 (el usuario eligió retomarlo en vez de continuar con 014).
 
 ---
 
-## Stored procedure (referencia funcional, no el SQL final)
+## Qué se construyó
 
-**`sp_inspeccion_firmar(p_inspeccion_id UUID, p_usuario_id UUID)`**
-1. Bloquea la fila de `inspeccion` (`FOR UPDATE`).
-2. Verifica `estado = 'EN_PROGRESO'`; si no, `RAISE EXCEPTION 'certificacion_no_editable'`.
-3. Suma `puntaje_obtenido`/`puntaje_maximo` desde `inspeccion_detalle`, calcula `porcentaje_cumplimiento` (misma lógica que `calcularResumen()` de [[015-wizard-certificacion]], ahora en SQL para que sea atómico con la firma).
-4. Busca en `inspeccion_rango_resultado` el rango que contiene el porcentaje → `clasificacion`.
-5. Fija `resultado_final = 'APROBADA'` (valor único posible hasta que 013 lo reemplace).
-6. Genera `codigo_verificacion` aleatorio (10 caracteres alfanuméricos mayúsculas), reintenta hasta 5 veces si colisiona.
-7. Calcula `fecha_vencimiento = firmado_en + N meses` (N configurable, default 12).
-8. `UPDATE inspeccion SET estado='FIRMADA', firmado_por_id=p_usuario_id, firmado_en=now(), ...`.
-9. Retorna la fila actualizada.
+HU-2 completa: firma/confirmación de una certificación ya completada por el wizard de [[015-wizard-certificacion]], generación de código de verificación único y PDF descargable.
 
-> **013 reemplazaría los pasos 2 y 5**: entre el 2 y el 3 agrega la verificación de que no exista un `hallazgo` `CRITICA` sin `accion_correctiva` `CUMPLIDO`; el paso 5 calcula `resultado_final` según la regla 1.1 en vez de fijar un valor constante.
+1. **BD**: `inspeccion.firmado_por_id/firmado_en/codigo_verificacion(único)/pdf_url/fecha_vencimiento/resultado_final` (migración `20260721230000_add_firma_certificacion`) + `sp_inspeccion_firmar(p_inspeccion_id, p_usuario_id, p_codigo_verificacion, p_meses_vigencia=12)`: bloquea la fila (`FOR UPDATE`), valida `estado='EN_PROGRESO'`, recalcula puntaje/porcentaje/clasificación desde `inspeccion_detalle` (antes solo se calculaba al vuelo, nunca se persistía) y en una transacción actualiza `estado='FIRMADA'` + campos de firma.
+2. **Backend**: `certificacion.entity.ts` ampliado (`EstadoCertificacion`, `puedeFirmarse` ahora también exige `estado==="EN_PROGRESO"` — antes solo miraba pendientes de sync, `generarCodigoVerificacion`, `calcularFechaVencimiento`), `FirmarCertificacionUseCase` nuevo, `certificacion.prisma-repository.ts` ampliado (`firmar()`, `establecerPdfUrl()`), `certificacion.controller.ts`/`inspeccion.router.ts` ampliados (`POST .../firmar`, `GET .../pdf`), wiring en `index.ts`.
+3. **PDF**: `pdf-certificacion.adapter.ts` (pdfkit) + `LocalCertificacionPdfAdapter`/`SupabaseCertificacionPdfAdapter` (mismo patrón dual que evidencias, bucket/carpeta propios `certificaciones-pdf`/`certificaciones` para no mezclar con evidencias subidas por el usuario).
+4. **Frontend**: tipos compartidos ampliados, `certificacion.servicio.ts` (`firmarCertificacion`, `obtenerPdfCertificacion`), `usar-revision-certificacion.ts` ampliado (`puedeFirmar`, `firmar()`, `errorFirma`), `revision/page.tsx` con vista post-firma (código + vigencia + descarga) y botón "Firmar y certificar" que **convive** con "Guardar y finalizar" (no lo reemplaza).
 
 ---
 
-## Archivos a crear/ampliar (referencia)
+## Desviaciones respecto al diseño original (`spec.md`/`task.md` de 2026-07-16)
 
-```
-packages/db/sql/procedimientos/sp_inspeccion_firmar.sql   ← CREAR
-
-apps/api/src/modules/inspeccion/
-├── domain/
-│   ├── certificacion.entity.ts          ← AMPLIAR (archivo de 015): puedeFirmarse, generarCodigoVerificacion, calcularFechaVencimiento
-│   ├── certificacion.repository.port.ts ← AMPLIAR (de 015): firmar, obtenerPorCodigoVerificacion
-│   └── inspeccion.errors.ts             ← AMPLIAR (de 015): CodigoVerificacionEnColisionError
-├── application/
-│   ├── certificacion.schema.ts          ← AMPLIAR (de 015): firmarCertificacionSchema
-│   └── casos-uso/
-│       └── firmar-certificacion.usecase.ts ← CREAR
-└── infrastructure/
-    ├── certificacion.prisma-repository.ts  ← AMPLIAR (de 015): firmar()
-    ├── certificacion.controller.ts         ← AMPLIAR (de 015): handlers firmar/pdf
-    ├── inspeccion.router.ts                ← AMPLIAR (de 015): POST .../firmar, GET .../pdf
-    └── pdf-certificacion.adapter.ts         ← CREAR
-
-apps/web/src/app/api/inspeccion/certificaciones/[id]/
-├── firmar/route.ts   ← CREAR
-└── pdf/route.ts       ← CREAR
-
-apps/web/.../certificaciones/
-├── _hooks/usar-revision-certificacion.ts   ← AMPLIAR (de 015): acción firmar()
-└── [id]/revision/page.tsx                  ← AMPLIAR (de 015): botón Firmar, código de verificación, descarga PDF
-```
+1. **PDF con pdfkit, no Puppeteer**: el diseño original elegía Puppeteer (HTML→PDF) para no acoplar el render a una librería de reportes. Pero en el ínterin (2026-07-21, mismo día) el sprint 008-reportes-analytics ya agregó `pdfkit` como dependencia del monorepo para sus propios PDFs. Se reutiliza esa misma librería en vez de sumar Puppeteer/Chromium (dependencia mucho más pesada) para un documento de una sola página. Mismo patrón que `ReportePdfAdapter`.
+2. **Generación del código de verificación en TypeScript, no dentro del SP**: el diseño original hacía que `sp_inspeccion_firmar` generara y reintentara el código internamente. Se cambió a que `generarCodigoVerificacion()` (dominio) genere el candidato y `FirmarCertificacionUseCase.firmarConReintento()` reintente (hasta 5 veces) si `sp_inspeccion_firmar` reporta colisión por el índice único — evita duplicar el algoritmo de generación en dos lenguajes y deja el reintento en la capa más fácil de testear (unit test con mocks, ver `firmar-certificacion.usecase.test.ts`). El SP conserva la responsabilidad atómica de bloquear la fila, recalcular puntaje/clasificación y persistir el cambio de estado.
+3. **`GET .../pdf` retorna `{ url }`, no un stream binario**: mismo patrón que `GET /reportes/:id/descargar` (008) — el proxy genérico `apps/web/src/app/api/inspeccion/[...path]/route.ts` siempre hace `await apiRes.json()`, así que agregar passthrough binario ahí habría significado tocar una ruta compartida por todos los demás endpoints del módulo (evidencias multipart incluidas). El frontend abre `pdfUrl` directamente (funciona igual con el adaptador local — servido por el `express.static("/archivos")` ya montado — que con Supabase Storage público).
+4. **Botón "Firmar y certificar" convive con "Guardar y finalizar"**, no lo reemplaza: se decidió en el momento para no quitarle al usuario la opción de guardar un avance sin firmar todavía (el spec dejaba esto "a decidir en el momento").
+5. **Storage de PDF en bucket/carpeta propios** (`certificaciones-pdf` local / `certificaciones` en Supabase), no reutilizando el bucket `evidencias` — separa documentos generados por el sistema de archivos subidos por el usuario, mismo criterio que 008 usó para su propio bucket `reportes`.
 
 ---
 
-## Contrato de API (referencia)
+## Pendiente / fuera de alcance (sin cambios respecto al spec original)
 
-| Método | Ruta | Descripción |
-|--------|------|-------------|
-| POST | `/inspeccion/certificaciones/:id/firmar` | Firmar/certificar `{ comentarioFirma? }` → `{ codigoVerificacion, pdfUrl, resultadoFinal, estado }` |
-| GET | `/inspeccion/certificaciones/:id/pdf` | Descarga/redirect al PDF |
-
-**Response — firmar exitoso:**
-```json
-{
-  "data": {
-    "id": "uuid",
-    "estado": "FIRMADA",
-    "codigoVerificacion": "A1B2C3D4E5",
-    "pdfUrl": "https://.../certificaciones/{empresaId}/{inspeccionId}/certificado.pdf",
-    "resultadoFinal": "APROBADA",
-    "fechaVencimiento": "2027-07-16",
-    "firmadoPorId": "uuid",
-    "firmadoEn": "2026-07-16T15:04:00.000Z"
-  }
-}
-```
+- **Hallazgos, plan de cumplimiento, resultado real por severidad** — [[013-hallazgos-plan-cumplimiento]], sigue bloqueado hasta que se implemente; `resultadoFinal` queda fijo en `APROBADA`.
+- **Notificaciones de vencimiento, portal público de verificación** — [[006-vigencia-notificaciones-portal]] (HU-1/HU-3), sigue parcialmente bloqueado; ahora que `codigoVerificacion`/`fechaVencimiento` existen, esas HU podrían retomarse en un sprint futuro.
+- **API keys / verificación pública programática** — HU-3 de [[009-integraciones-datos-masivos]], pospuesta; ahora que existen los campos que necesitaba, podría retomarse.
+- **Aceptación/apelaciones de certificación** — [[011-aceptacion-apelaciones-certificacion]], sigue bloqueado (depende de hallazgos, no solo de la firma).
 
 ---
 
-## Notas importantes
+## Verificación
 
-- **No implementar sin retomar esta decisión con el usuario primero.**
-- Cuando se retome, revisar si [[015-wizard-certificacion]] cambió de forma incompatible con este diseño (nombres de archivo, contrato de API) antes de asumir que sigue vigente tal cual está aquí.
-- [[013-hallazgos-plan-cumplimiento]] no puede empezar a implementarse hasta que este sprint se retome y se complete.
+- 191 tests backend (185→191, +6 en `firmar-certificacion.usecase.test.ts`) + 6 nuevos en `certificacion.entity.test.ts` (generarCodigoVerificacion/calcularFechaVencimiento/puedeFirmarse con FIRMADA) — todos en verde.
+- 199 tests frontend (195→199, +4 en `usar-revision-certificacion.test.ts`) — en verde, misma única excepción preexistente de sprint 001 (`strip-resumen-plantilla.test.tsx`, 6 tests, no tocado).
+- Verificado end-to-end vía curl, directo contra `apps/api` (puerto 4000) y a través del proxy real de Next.js (puerto 3000) con sesión real: firmar 3 certificaciones demo distintas (códigos de verificación únicos confirmados), PDF real descargado (`%PDF` en los primeros bytes), `GET .../pdf`, doble firma → 409, `pendientesSincronizacion>0` → 409, edición de respuestas sobre certificación ya firmada → 409, y la página `/certificaciones/[id]/revision` cargando sin error de servidor para una certificación firmada.
+- **No verificado con clics reales en un navegador** (sin herramienta de automatización de browser en esta sesión, mismo límite que sprints anteriores).

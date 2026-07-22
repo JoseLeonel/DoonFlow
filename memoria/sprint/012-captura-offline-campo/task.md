@@ -19,29 +19,18 @@
 
 ## Agente: `agente-backend`
 
-- [ ] **T-483** Agregar `capturaOffline` y `sincronizadoEn` al tipo `Certificacion` en `apps/api/src/modules/inspeccion/domain/certificacion.entity.ts` (ampliación de la entidad `Inspeccion` ya definida en [[015-wizard-certificacion]] — vive dentro de `modules/inspeccion/`, el mismo módulo del editor de plantillas de 001, no en un módulo `certificaciones` aparte).
-- [ ] **T-484** Agregar función pura `puedeFirmarse(certificacion: Certificacion, pendientesSincronizacion: number): boolean` en `certificacion.entity.ts` — retorna `false` si `pendientesSincronizacion > 0` (regla de negocio 1 del spec: la firma requiere estar en línea y con todo sincronizado). No depende de I/O.
-- [ ] **T-485** Crear error de dominio `SincronizacionPendienteError` en `certificacion.errors.ts` — se lanza al intentar firmar con datos pendientes de sincronizar; el controller lo mapea a HTTP 409.
-- [ ] **T-486** Ampliar el puerto `certificacion.repository.port.ts` con:
-  - `upsertDetalleConResolucionConflicto(inspeccionId, empresaId, detalle, capturadoEnCliente): Promise<ResultadoUpsertDetalle>`
-  - `marcarSincronizado(inspeccionId, empresaId, fecha): Promise<void>`
-  - `contarPendientesSincronizacion(inspeccionId, empresaId): Promise<number>`
-- [ ] **T-487** Crear caso de uso `sincronizar-captura-offline.usecase.ts` en `application/casos-uso/`:
-  - Recibe un lote de respuestas pendientes (`SincronizarLoteInput`, ver `impl.md` → Contrato de API).
-  - Para cada respuesta, hace upsert idempotente por `(inspeccionId, nodoId)`, comparando `capturadoEnCliente` (timestamp de captura local) contra `InspeccionDetalle.actualizadoEn` en servidor.
-  - Si el servidor ya tiene una versión más reciente que la que el cliente cree estar sincronizando (conflicto por doble captura offline, regla de negocio 2 del spec), conserva la versión más nueva por marca de tiempo (última escritura gana) y registra el conflicto llamando al puerto de auditoría de [[010-seguridad-privacidad-continuidad]] con `accion = "SINCRONIZACION_CONFLICTO"`.
-  - Al terminar el lote sin pendientes restantes, llama `marcarSincronizado()` y setea `capturaOffline = true` si el lote vino marcado como offline.
-- [ ] **T-488** Implementar los métodos de T-486 en `certificacion.prisma-repository.ts`, envolviendo cada lote en una transacción Prisma (`$transaction`) para que un fallo parcial no dañe registros ya escritos del mismo lote.
-- [ ] **T-489** Agregar endpoints en `certificacion.controller.ts` / `inspeccion.router.ts` (dentro de `apps/api/src/modules/inspeccion/`, ver `impl.md` → Contrato de API):
-  - `POST /certificaciones/:id/sincronizacion` — lote de respuestas pendientes.
-  - `POST /certificaciones/:id/sincronizacion/evidencias` — sube una evidencia pendiente (multipart, un archivo por request).
-  - `GET /certificaciones/:id/sincronizacion/estado` — `{ pendientes, sincronizadoEn, capturaOffline }`.
-  - Límite de tamaño de lote (ej. 200 respuestas / request) y de archivo (reutiliza el límite ya definido en [[015-wizard-certificacion]] para evidencias); responde 413 con mensaje claro si se excede.
-- [ ] **T-490 (⏸️ bloqueado — depende de que se retome 005)** Modificar el caso de uso de firma de [[005-certificacion-plan-cumplimiento]] (`firmar-certificacion.usecase.ts`, **no existe todavía, pausado**) para invocar `puedeFirmarse()` antes de cambiar el estado a `FIRMADA`, propagando `SincronizacionPendienteError` si corresponde. No se puede implementar hasta que 005 exista.
-- [ ] **T-491** Crear Route Handlers proxy Next.js:
-  - `apps/web/src/app/api/certificaciones/[id]/sincronizacion/route.ts` → `POST`
-  - `apps/web/src/app/api/certificaciones/[id]/sincronizacion/evidencias/route.ts` → `POST`
-  - `apps/web/src/app/api/certificaciones/[id]/sincronizacion/estado/route.ts` → `GET`
+- [x] **T-483** Agregado `capturaOffline` y `sincronizadoEn` al tipo `Certificacion` en `apps/api/src/modules/inspeccion/domain/certificacion.entity.ts`.
+- [x] **T-484** Agregada función pura `puedeFirmarse(certificacion: { estado: string }, pendientesSincronizacion: number): boolean` en `certificacion.entity.ts` — misma firma estructural mínima que `puedeEditarRespuestas` (no acopla al tipo `Certificacion` completo, para no depender de campos de 005 que no existen). No depende de I/O.
+- [~] **T-485 (parcial)** `SincronizacionPendienteError` se agregó en `apps/api/src/modules/inspeccion/domain/inspeccion.errors.ts` — **no existe** un archivo `certificacion.errors.ts` separado en el código real (todos los errores del módulo viven juntos en `inspeccion.errors.ts`, incluidos los de plantillas/aprobación de sprints previos). El controller mapea el error a 409, pero **ningún caso de uso lo lanza todavía** — sin `firmar-certificacion.usecase.ts` (T-490, bloqueado), no hay quien lo dispare; queda listo para cuando 005 se retome.
+- [~] **T-486 (parcial)** Puerto `certificacion.repository.port.ts` ampliado con:
+  - `upsertDetallesConResolucionConflicto(inspeccionId, empresaId, detalles[]): Promise<ResultadoUpsertDetalle[]>` — **plural/por lote**, no singular como decía el spec, para que la transacción de T-488 envuelva todo el lote de una vez (ver Arquitectura hexagonal del `impl.md`).
+  - `marcarSincronizado(inspeccionId, empresaId, fecha, capturaOffline): Promise<void>`.
+  - **No se agregó** `contarPendientesSincronizacion()` — "pendientes" es estado exclusivamente del cliente (cola en IndexedDB); el servidor no puede contarlos de forma confiable sin ese dato, documentado en el propio código.
+- [x] **T-487** Caso de uso `sincronizar-captura-offline.usecase.ts` creado en `application/casos-uso/`. El puntaje **se recalcula server-side** con `calcularPuntajeRespuesta()` (nunca se confía el puntaje que manda el cliente). El registro de conflictos usa `RegistradorEventoAuditoria` (el helper de inyección ya establecido en 010, `apps/api/src/shared/auditoria/registrar-evento-auditoria.ts`), no un puerto de auditoría inyectado directamente — mismo patrón que `auth`/`permisos`/`retencion`.
+- [x] **T-488** Métodos de T-486 implementados en `certificacion.prisma-repository.ts`, todo el lote envuelto en `$transaction`.
+- [x] **T-489** 3 endpoints agregados en `certificacion.controller.ts`/`inspeccion.router.ts`. Límite de lote: 200 respuestas (verificado en el caso de uso, `413 lote_excede_limite`). Límite de archivo: reutiliza `subidaArchivoEvidencia` (10MB) ya definido en 015.
+- [ ] **T-490 (⏸️ bloqueado — depende de que se retome 005)** No implementado — `firmar-certificacion.usecase.ts` no existe todavía.
+- [x] **T-491** **Sin archivos nuevos** — el catch-all `apps/web/src/app/api/inspeccion/[...path]/route.ts` ya existente desde 015 reenvía genéricamente cualquier subruta bajo `/inspeccion/certificaciones/...` (incluye JSON y `multipart/form-data`), así que ya cubre los 3 endpoints nuevos sin necesitar Route Handlers dedicados. Verificado por curl a través del proxy real (ver `impl.md`).
 
 ---
 
@@ -49,18 +38,18 @@
 
 > Decisión técnica de almacenamiento local (spec 012 → "Decisiones pendientes"): **IndexedDB** como fuente de verdad de datos offline (no Service Worker/Cache API — la app no necesita cargar la página estando desconectada, solo mantener el estado de una sesión ya abierta; ver `impl.md` → "Por qué IndexedDB").
 
-- [ ] **T-492** Crear `apps/web/src/lib/offline/db-offline.ts`: abre/gestiona la base IndexedDB `doonflow-offline-db` (versión 1) con los 4 object stores (`respuestasPendientes`, `evidenciasPendientes`, `certificacionesOffline`, `colaSincronizacion` — diseño completo en `impl.md`).
-- [ ] **T-493** Crear `apps/web/src/lib/offline/respuestas-offline.store.ts`: `guardarRespuestaLocal(respuesta)`, `listarRespuestasPendientes(inspeccionId)`, `marcarRespuestaSincronizada(idLocal)`, `contarPendientes(inspeccionId)`.
-- [ ] **T-494** Crear `apps/web/src/lib/offline/evidencias-offline.store.ts`: `guardarEvidenciaLocal(blob, metadata)`, `listarEvidenciasPendientes(inspeccionId)`, `marcarEvidenciaSincronizada(idLocal)`. Incluye compresión previa del `Blob` (Canvas API nativo, sin librería externa) antes de guardarlo localmente — decisión de `agente-frontend` sobre la "Decisión pendiente" de compresión del spec: comprimir siempre al capturar, no solo con conexión lenta, para minimizar tiempo de sync y espacio en IndexedDB.
-- [ ] **T-495** Crear `apps/web/src/lib/offline/cola-sincronizacion.ts`: orquesta el envío — primero respuestas, luego evidencias (regla de negocio 3 del spec: mismo destino final `InspeccionEvidencia`/Supabase Storage). Reintenta con backoff exponencial (ej. 2s, 4s, 8s, máx. 5 intentos) y tolera fallo parcial: si una evidencia falla, el resto de respuestas y evidencias ya enviadas quedan marcadas como sincronizadas (regla de negocio 4 del spec).
-- [ ] **T-496** Crear `apps/web/src/lib/offline/estado-conexion.ts`: hook `usarEstadoConexion()` basado en eventos `online`/`offline` del navegador, más una verificación activa liviana (`fetch` HEAD de bajo costo con timeout corto) para no confiar solo en `navigator.onLine`, que en redes rurales inestables puede reportar "en línea" sin conectividad real.
-- [ ] **T-497** Crear hook `usar-captura-offline.ts` en `apps/web/src/app/(dashboard)/certificaciones/[id]/_hooks/`: integra `usarEstadoConexion()` + `colaSincronizacion` + los stores de T-493/T-494. Expone `estadoSincronizacion: 'DESCONECTADO' | 'SINCRONIZANDO' | 'SINCRONIZADO' | 'ERROR_PARCIAL'`, `pendientes: number`, y acciones `guardarRespuesta()`, `guardarEvidencia()`, `forzarSincronizacion()`.
-- [ ] **T-498** Modificar el hook `usar-responder-certificacion.ts` (de [[015-wizard-certificacion]]) para que todo guardado de respuesta pase primero por `usar-captura-offline` (escritura local inmediata) y dispare sincronización en segundo plano cuando hay conexión — el formulario deja de depender de que la llamada HTTP tenga éxito de inmediato.
-- [ ] **T-499** Crear componente `BannerEstadoConexion` en `_components/` del módulo certificaciones: banner fijo, siempre visible en "Responder formulario", con los 4 estados visuales (ver `impl.md` → Diseño del indicador).
-- [ ] **T-500** Modificar `apps/web/src/app/(dashboard)/certificaciones/[id]/responder/page.tsx` (de 015) para integrar `BannerEstadoConexion` y `usar-captura-offline` — sin bloquear ningún control del formulario al perder conexión (regla explícita del spec 012).
-- [ ] **T-501 (⏸️ bloqueado — depende de que se retome 005)** Modificar `apps/web/src/app/(dashboard)/certificaciones/[id]/revision/page.tsx` (pantalla de revisión, base en 015; el botón "Firmar y certificar" lo agrega 005, **pausado**): deshabilitar ese botón con mensaje explicativo ("Hay N respuestas/evidencias sin sincronizar. Conéctate para poder firmar.") mientras `pendientesSincronizacion > 0`. No se puede implementar hasta que 005 exista.
-- [ ] **T-502** Crear componente `BadgeCapturaOffline` en `_components/` del módulo certificaciones: muestra "Capturada offline" + fecha de `sincronizadoEn` formateada en hora de Costa Rica (ver `CLAUDE.md` → conversión de timestamps en la capa de presentación).
-- [ ] **T-503** Completar `certificacion.servicio.ts` (`_servicios/` del módulo certificaciones): agregar `sincronizarLote(inspeccionId, lote)`, `subirEvidenciaPendiente(inspeccionId, evidencia)`, `obtenerEstadoSincronizacion(inspeccionId)`, consumiendo los Route Handlers de T-491. Modificar también la pantalla de detalle de certificación (vista administrador, de 005) para renderizar `BadgeCapturaOffline` cuando `capturaOffline = true`.
+- [x] **T-492** `apps/web/src/lib/offline/db-offline.ts`: abre/gestiona `doonflow-offline-db` (v1) con los 4 object stores, vía API nativa de IndexedDB envuelta en promesas (sin librería `idb`).
+- [x] **T-493** `apps/web/src/lib/offline/respuestas-offline.store.ts`: `guardarRespuestaLocal`, `listarRespuestasPendientes`, `marcarRespuestaSincronizada`, `marcarRespuestaConError`, `contarRespuestasPendientes` (nombre final, no `contarPendientes` a secas — más explícito junto al equivalente de evidencias).
+- [x] **T-494** `apps/web/src/lib/offline/evidencias-offline.store.ts`: `guardarEvidenciaLocal`, `listarEvidenciasPendientes`, `marcarEvidenciaSincronizada`/`marcarEvidenciaConError`. Compresión con `<canvas>` (redimensiona a 1600px, JPEG ~0.7) — con fallback silencioso a "sin comprimir" si el tipo no es imagen comprimible (PDF/DOC/DOCX/HEIC) o si el entorno no soporta `createImageBitmap`/Canvas 2D (ej. jsdom en tests).
+- [x] **T-495** `apps/web/src/lib/offline/cola-sincronizacion.ts`: `procesarColaSincronizacion()` — respuestas antes que evidencias, backoff exponencial (2s/4s/8s/16s/32s, 5 intentos), tolera fallo parcial de evidencias sin revertir lo ya sincronizado. También administra el store `certificacionesOffline` (metadato `ultimaModificacionLocal`/`intentosFallidosConsecutivos`, usado por la alerta de 24h).
+- [x] **T-496** `apps/web/src/lib/offline/estado-conexion.ts`: `usarEstadoConexion()`. La verificación activa liviana usa `fetch("/", { method: "HEAD" })` contra el propio origin (no se creó un endpoint `/api/salud` nuevo) — mismo efecto (confirma alcanzabilidad real del servidor), sin infraestructura adicional.
+- [~] **T-497 (parcial)** Hook `usar-captura-offline.ts` creado en `apps/web/src/app/(dashboard)/certificaciones/_hooks/` — **no** en `[id]/_hooks/`: esa carpeta no existe en el código real, 015 puso todos los hooks de certificaciones en el `_hooks/` del módulo (no por certificación individual). Expone `guardarRespuestasLote()` (por lote, no `guardarRespuesta()` singular — el wizard guarda toda una sección de una vez) y `guardarEvidencia()`. `estadoSincronizacion` es `'DESCONECTADO' | 'SINCRONIZANDO' | 'SINCRONIZADO' | 'ERROR_PARCIAL' | null` — se agregó `null` ("nada que comunicar") para que el banner pueda ocultarse cuando está online y sin pendientes, calculado como estado derivado (`useMemo`), no como transiciones manuales.
+- [x] **T-498** `usar-responder-certificacion.ts` modificado: recibe `capturaOffline: CapturaOfflineInyectada` inyectado (composición explícita desde la página, no importa `usar-captura-offline` directamente) — `guardarSeccion()`/`subirEvidencia()` pasan por él. Como `guardarRespuestasLote()` nunca espera la sincronización de red (la dispara sin `await`), el formulario avanza tan pronto termina la escritura local, independientemente de la conectividad.
+- [x] **T-499** `BannerEstadoConexion` creado con los 4 estados + spinner en `SINCRONIZANDO` + línea opcional de alerta de 24h.
+- [x] **T-500** `responder/page.tsx` modificado: integra `usarCapturaOffline` + `BannerEstadoConexion`, sin bloquear ningún control.
+- [~] **T-501 (parcial — depende de que se retome 005)** No hay botón "Firmar y certificar" que deshabilitar (005 pausado, nunca se agregó). Sí se agregó un **banner informativo** (`BannerEstadoConexion`) en `revision/page.tsx` mostrando pendientes — no bloquea nada porque no hay nada que bloquear todavía, pero deja la superficie lista para cuando 005 agregue el botón real.
+- [x] **T-502** `BadgeCapturaOffline` creado, formatea `sincronizadoEn` en hora de Costa Rica (`America/Costa_Rica`), solo se renderiza si `capturaOffline === true`.
+- [~] **T-503 (parcial)** `certificacion.servicio.ts` completado con `sincronizarLote`, `subirEvidenciaPendiente`, `obtenerEstadoSincronizacion`. **No existe** una "pantalla de detalle de certificación (vista administrador)" — 005 nunca la construyó. `BadgeCapturaOffline` se integró en su lugar en `tabla-certificaciones.tsx` (columna Estado del listado), la vista administrativa que sí existe.
 
 ---
 
@@ -68,16 +57,18 @@
 
 > Vitest. Dominio puro sin mocks; caso de uso con mock del repositorio y del puerto de auditoría.
 
-- [ ] **T-504** `certificacion.entity.test.ts` (casos nuevos sobre la entidad ya existente de 005):
-  - `puedeFirmarse()` con `pendientesSincronizacion = 0` → `true`
-  - `puedeFirmarse()` con `pendientesSincronizacion > 0` → `false`
-  - `puedeFirmarse()` con certificación ya `FIRMADA` y `pendientesSincronizacion = 0` → conserva el comportamiento previo de 005 (no se re-firma)
-- [ ] **T-505** `sincronizar-captura-offline.usecase.test.ts`:
-  - Con una respuesta nueva (sin conflicto) → llama `repo.upsertDetalleConResolucionConflicto()` una vez y no llama al puerto de auditoría.
-  - Con dos respuestas para el mismo `nodoId` donde la del servidor es más reciente que `capturadoEnCliente` → conserva la del servidor y llama al puerto de auditoría con `accion = "SINCRONIZACION_CONFLICTO"`.
-  - Al procesar un lote completo sin pendientes restantes → llama `repo.marcarSincronizado()`.
-  - Si una evidencia del lote falla, las respuestas ya procesadas no se revierten (no se llama a ningún rollback sobre ellas).
-- [ ] **T-506** Test de integración ligera (contra BD de pruebas local): `POST /certificaciones/:id/sincronizacion` enviado dos veces con el mismo payload → segunda llamada no duplica filas en `inspeccion_detalle` (verifica idempotencia del upsert por `(inspeccionId, nodoId)`).
+- [~] **T-504 (parcial)** `certificacion.entity.test.ts` (2 casos nuevos):
+  - [x] `puedeFirmarse()` con `pendientesSincronizacion = 0` → `true`.
+  - [x] `puedeFirmarse()` con `pendientesSincronizacion > 0` → `false`.
+  - [ ] **N/A**: caso de certificación ya `FIRMADA` — no existe ese estado en el tipo actual (`estado: "EN_PROGRESO"` literal, sin `FIRMADA` hasta que 005 se retome). Documentado con comentario en el propio test.
+- [~] **T-505 (parcial)** `sincronizar-captura-offline.usecase.test.ts` (5 tests):
+  - [x] Respuesta nueva sin conflicto → llama `repo.upsertDetallesConResolucionConflicto()` una vez, no llama al registrador de auditoría.
+  - [x] Servidor con versión más reciente → conserva la del servidor, llama al registrador con `accion: "SINCRONIZACION_CONFLICTO"`.
+  - [x] Lote sin pendientes restantes → llama `repo.marcarSincronizado()`.
+  - [x] Lote que excede el límite → lanza `LoteSincronizacionExcedeLimiteError` sin tocar el repositorio.
+  - [x] Evidencia sin respuesta sincronizada → lanza `RespuestaNoSincronizadaError`.
+  - [ ] **N/A a nivel backend**: "si una evidencia del lote falla, las respuestas no se revierten" — evidencias y respuestas son endpoints separados en la implementación real (una evidencia por request, no un array batcheado junto a las respuestas), así que no comparten transacción que revertir. El escenario equivalente se cubre en el frontend (`cola-sincronizacion.test.ts`, ver T-509).
+- [~] **T-506 (parcial)** No se creó un archivo de test de integración contra una BD de pruebas dedicada — **no existe infraestructura de BD de pruebas en este proyecto** (mismo gap ya documentado en sprints anteriores). En su lugar, la idempotencia se verificó manualmente por curl contra la BD real de desarrollo: se envió el mismo lote dos veces y `certificacion.detalles` se mantuvo en 2 filas (sin duplicar) — la segunda llamada reportó `conflictos: 2` en vez de `procesadas` silenciosas, un hallazgo real documentado en `impl.md` (el `actualizadoEn` del servidor, no el `capturadoEnCliente` original, es lo que se compara — un reintento genuino del mismo cliente tras perder la respuesta HTTP se clasificaría como "conflicto" en vez de no-op limpio; no hay pérdida de datos, la fila no cambia, pero sí generaría una entrada de auditoría de conflicto innecesaria).
 
 ---
 
@@ -85,20 +76,9 @@
 
 > Vitest + React Testing Library. IndexedDB se mockea con `fake-indexeddb`; sin llamadas reales de red.
 
-- [ ] **T-507** `banner-estado-conexion.test.tsx`:
-  - `estado = 'DESCONECTADO'` → renderiza "Sin conexión — guardando localmente"
-  - `estado = 'SINCRONIZANDO'` → renderiza "Sincronizando..." con indicador de progreso
-  - `estado = 'SINCRONIZADO'` → renderiza "Sincronizado" y desaparece/atenúa tras unos segundos
-  - `estado = 'ERROR_PARCIAL'` → renderiza mensaje de reintento en curso, no un error bloqueante
-- [ ] **T-508** `usar-captura-offline.test.ts` (hook, con `fake-indexeddb`):
-  - `guardarRespuesta()` mientras `navigator.onLine = false` → persiste en IndexedDB y no intenta red
-  - Al pasar de offline a online → dispara `forzarSincronizacion()` automáticamente
-  - `pendientes` refleja el conteo real de `respuestasPendientes` + `evidenciasPendientes` sin sincronizar
-  - `estadoSincronizacion` pasa a `'SINCRONIZADO'` solo cuando `pendientes === 0`
-- [ ] **T-509** `cola-sincronizacion.test.ts`:
-  - Reintenta con backoff cuando la llamada de red falla (mock de `fetch` que falla las primeras N veces)
-  - Si la evidencia falla pero las respuestas del mismo lote tuvieron éxito, estas quedan marcadas como sincronizadas (no se pierden)
-  - Procesa respuestas antes que evidencias dentro del mismo lote
+- [x] **T-507** `banner-estado-conexion.test.tsx` (6 tests): los 4 estados + caso `null` (no renderiza nada) + advertencia de 24h condicional. "Desaparece tras unos segundos" es responsabilidad del hook (temporizador), no del componente — el test verifica el componente puramente por prop, consistente con que es presentacional.
+- [x] **T-508** `usar-captura-offline.test.ts` (4 tests, con `fake-indexeddb` + mocks de `estado-conexion`/`certificacion.servicio`): `guardarRespuestasLote()` offline no llama a la red; `pendientes` refleja el conteo real; reconexión dispara sincronización automática; `estadoSincronizacion` llega a `'SINCRONIZADO'` solo con `pendientes === 0`.
+- [x] **T-509** `cola-sincronizacion.test.ts` (4 tests, en `src/lib/offline/__tests__/`): backoff con reintentos (base de backoff reducida a 1ms vía `_establecerBackoffBaseMsParaTests()` para no esperar segundos reales — mezclar fake timers con `fake-indexeddb` resultó frágil, ver `impl.md`), fallo parcial de evidencia no revierte respuestas ya sincronizadas, orden respuestas-antes-que-evidencias.
 
 ---
 

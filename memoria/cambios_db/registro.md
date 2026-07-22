@@ -4,6 +4,37 @@ Ver formato y diferencia con `packages/db/produccion/` en `memoria/cambios_db/RE
 
 ---
 
+## [2026-07-22] Hallazgos y plan de cumplimiento — 013-hallazgos-plan-cumplimiento
+
+- Tipo: 5 tablas nuevas + 1 stored procedure reemplazado (`CREATE OR REPLACE`) + 1 stored procedure nuevo
+- Módulo: ampliación de `inspeccion` (mismo módulo del wizard de 015 y de la firma de 005) — sin módulo backend nuevo.
+- Detalle:
+  - `hallazgo`: `inspeccion_id` (FK cascade), `detalle_id` (FK opcional a `inspeccion_detalle`, `ON DELETE SET NULL`), `descripcion`, `severidad` (VARCHAR(20): `CRITICA`/`MAYOR`/`MENOR`), `empresa_id`. Índices `(inspeccion_id)` y `(empresa_id, severidad)`.
+  - `hallazgo_evidencia`: mismo patrón que `inspeccion_evidencia` (005), FK cascade a `hallazgo`.
+  - `plan_cumplimiento`: `inspeccion_id` **único** (una certificación tiene a lo sumo un plan), `estado` (VARCHAR(20): `EN_SEGUIMIENTO`/`CERRADO`/`REABIERTO`), `cerrado_por_id` (FK opcional a `usuario`, `ON DELETE SET NULL`), `cerrado_en`.
+  - `accion_correctiva`: `plan_cumplimiento_id` (FK cascade), `hallazgo_id` (FK restrict — un hallazgo no se borra mientras tenga acciones), `descripcion`, `responsable_id`/`verificado_por_id` (FK a `usuario`), `fecha_limite` (DATE), `estado` (VARCHAR(20), default `PENDIENTE`), `porcentaje_avance`, `comentario_verificacion`. Índices `(plan_cumplimiento_id)`, `(hallazgo_id)`, `(responsable_id, estado)`, `(fecha_limite)` (soporta el cálculo de vencidas en lectura).
+  - `accion_correctiva_evidencia`: mismo patrón que las otras dos tablas de evidencia, FK cascade a `accion_correctiva`.
+  - `severidad`/`estado` de `plan_cumplimiento` y `accion_correctiva` son `VARCHAR`, no enum de Postgres — mismo criterio ya usado en `Inspeccion.estado`/`resultadoFinal` (validado en Zod, capa de aplicación).
+  - `sp_inspeccion_firmar` (mismo archivo `packages/db/sql/procedimientos/sp_inspeccion_firmar.sql`, `CREATE OR REPLACE`, la migración de 005 no se edita): agrega el bloqueo por hallazgo `CRITICA` sin ninguna `accion_correctiva` `CUMPLIDO` (`RAISE EXCEPTION 'hallazgo_critico_pendiente'`, revierte toda la transacción) y reemplaza el `resultado_final` fijo `'APROBADA'` de 005 por el cálculo real de la regla 1 (sin hallazgos → `APROBADA`; con `MAYOR`/`MENOR` → `APROBADA_CON_OBSERVACIONES`).
+  - `sp_plan_cumplimiento_indicadores(p_plan_id)` nuevo: agregado de `total`/`pendientes`/`en_proceso`/`en_revision`/`cumplidas`/`no_cumplidas`/`vencidas`/`porcentaje_cumplimiento`/`proximas_a_vencer`, aplicando el mismo cálculo de "vencido" en lectura que `domain/accion-correctiva.entity.ts::calcularEstadoEfectivo()` (sin job programado — decisión documentada en `impl.md` del sprint).
+- **Desviación respecto al plan original**: el seed `certificaciones-demo.ts` que `task.md`/`impl.md` de 005 y 013 dan por existente **nunca se creó** en 005 (esa sesión verificó por curl contra certificaciones creadas en vivo, no por seed) — no hay fixture de certificación demo de la cual colgar hallazgos/plan. No se crea el seed en este sprint tampoco; la verificación E2E se hace igual que 005, generando una certificación real vía API. Documentado también en `impl.md` de este sprint.
+- **RLS**: no se agregan policies nuevas en `packages/db/sql/rls/` — mismo patrón de todos los sprints desde 007 en adelante (el aislamiento multiempresa real se aplica en `infrastructure/` de cada repositorio Prisma, filtrando siempre por `empresaId`/trazando hasta `inspeccion.empresa_id`; `auth_rls.sql` original nunca se extendió a las tablas de dominio agregadas después de 004, ver TODO ya documentado ahí). `hallazgo` tiene `empresa_id` propio (copiado de la certificación al crearse); las demás tablas se trazan vía `EXISTS`/join hasta `hallazgo`/`plan_cumplimiento`/`inspeccion` en el filtro de la capa de aplicación, no en SQL.
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260722000000_add_hallazgos_plan_cumplimiento/migration.sql`, `packages/db/sql/procedimientos/sp_inspeccion_firmar.sql` (reemplazado), `packages/db/sql/procedimientos/sp_plan_cumplimiento_indicadores.sql` (nuevo)
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía psql + registro manual en `_prisma_migrations` (entorno no interactivo). `prisma generate` ejecutado. Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
+## [2026-07-21] Firma de certificación (Inspeccion.firmadoPorId/etc.) — 005-certificacion-plan-cumplimiento (retomado)
+
+- Tipo: 6 columnas nuevas + 1 índice único + 1 FK en tabla existente + 1 stored procedure nuevo
+- Módulo: ampliación de `inspeccion` (mismo módulo del wizard de 015) — sin tabla nueva. Sprint 005 estaba pausado desde 2026-07-16; el usuario decidió retomarlo esta sesión en vez de continuar con 014.
+- Detalle: `inspeccion.firmado_por_id` (FK → `usuario.id`, `ON DELETE SET NULL`), `firmado_en` (TIMESTAMP), `codigo_verificacion` (VARCHAR(20), **único en todo el sistema**, no solo por empresa), `pdf_url` (TEXT), `fecha_vencimiento` (DATE), `resultado_final` (VARCHAR(30), fijo en `'APROBADA'` hasta que 013-hallazgos-plan-cumplimiento calcule el valor real por severidad).
+- Stored procedure `sp_inspeccion_firmar(p_inspeccion_id, p_usuario_id, p_codigo_verificacion, p_meses_vigencia=12)`: bloquea la fila (`FOR UPDATE`), valida `estado='EN_PROGRESO'`, recalcula `puntaje_obtenido`/`puntaje_maximo`/`porcentaje_cumplimiento`/`clasificacion` desde `inspeccion_detalle`/`inspeccion_plantilla`/`inspeccion_rango_resultado` (antes solo se calculaban al vuelo en TS, nunca se persistían), y en una sola transacción actualiza `estado='FIRMADA'` + los campos de firma. **Desviación respecto al `impl.md` original de 005**: el código de verificación se genera en TypeScript (`generarCodigoVerificacion()`, dominio) y se reintenta desde la capa de aplicación ante colisión `unique_violation`, no dentro del SP — evita duplicar el algoritmo de generación en dos lenguajes.
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260721230000_add_firma_certificacion/migration.sql`, `packages/db/sql/procedimientos/sp_inspeccion_firmar.sql`
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía psql + registro manual en `_prisma_migrations`. `prisma generate` ejecutado sin problemas (sin servidor Node bloqueando el puerto 4000). Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
 ## [2026-07-21] Inspeccion.capturaOffline / sincronizadoEn — 012-captura-offline-campo
 
 - Tipo: 2 columnas nuevas + 1 índice en tabla existente

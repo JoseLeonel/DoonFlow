@@ -93,6 +93,11 @@ model Usuario {
   avisosPrivacidadRegistrados AvisoPrivacidad[]
   reportesGenerados     ReporteGenerado[]
   importacionesCreadas  ImportacionLote[]
+  certificacionesFirmadas Inspeccion[] @relation("InspeccionFirmadoPor")
+  /// 013-hallazgos-plan-cumplimiento
+  accionesResponsable   AccionCorrectiva[] @relation("AccionesResponsable")
+  accionesVerificadas   AccionCorrectiva[] @relation("AccionesVerificadas")
+  planesCerrados        PlanCumplimiento[] @relation("PlanesCerrados")
 
   @@index([empresaId])
   @@index([sucursalId])
@@ -367,14 +372,23 @@ model Inspeccion {
   creadoEn               DateTime  @default(now()) @map("creado_en")
   actualizadoEn          DateTime  @updatedAt @map("actualizado_en")
 
+  /// 005-certificacion-plan-cumplimiento (retomado 2026-07-21) — HU-2, firma/PDF/código de verificación.
+  firmadoPorId    String?   @map("firmado_por_id")
+  firmadoEn       DateTime? @map("firmado_en")
+  codigoVerificacion String? @unique @map("codigo_verificacion") @db.VarChar(20)
+  pdfUrl          String?   @map("pdf_url")
+  fechaVencimiento DateTime? @map("fecha_vencimiento") @db.Date
+  resultadoFinal  String?   @map("resultado_final") @db.VarChar(30)
+
   plantilla      InspeccionPlantilla    @relation(fields: [plantillaId], references: [id])
   sucursal       Sucursal?                @relation(fields: [sucursalId], references: [id])
+  firmadoPor     Usuario?                 @relation("InspeccionFirmadoPor", fields: [firmadoPorId], references: [id])
   detalles       InspeccionDetalle[]
   evidencias     InspeccionEvidencia[]
   reinspecciones InspeccionReinspeccion[]
-  // [[005-certificacion-plan-cumplimiento]] agrega aquí (pausado, no implementar todavía):
-  //   firmadoPorId, firmadoEn, codigoVerificacion, pdfUrl, fechaVencimiento, resultadoFinal, relación firmadoPor.
-  // [[013-hallazgos-plan-cumplimiento]] agrega (cuando 005 se retome): hallazgos Hallazgo[], planCumplimiento PlanCumplimiento?
+  /// 013-hallazgos-plan-cumplimiento
+  hallazgos        Hallazgo[]
+  planCumplimiento PlanCumplimiento?
 
   @@index([empresaId, estado])
   @@index([plantillaId])
@@ -409,6 +423,7 @@ model InspeccionDetalle {
   inspeccion Inspeccion     @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
   nodo       InspeccionNodo @relation(fields: [nodoId], references: [id])
   evidencias InspeccionEvidencia[]
+  hallazgos  Hallazgo[]
 
   @@index([inspeccionId])
   @@map("inspeccion_detalle")
@@ -448,6 +463,109 @@ model InspeccionReinspeccion {
 
   @@index([inspeccionId])
   @@map("inspeccion_reinspeccion")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 013-hallazgos-plan-cumplimiento — Hallazgos y plan de cumplimiento (Parte B
+// de 005-certificacion-plan-cumplimiento, dividido por tamaño).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// Incumplimiento detectado en una certificación — automático (desde una respuesta con
+/// puntaje incompleto) o manual (agregado por el auditor durante la revisión).
+model Hallazgo {
+  id           String   @id @default(uuid())
+  inspeccionId String   @map("inspeccion_id")
+  detalleId    String?  @map("detalle_id")
+  descripcion  String
+  severidad    String   @db.VarChar(20) // CRITICA | MAYOR | MENOR
+  empresaId    String   @map("empresa_id")
+  creadoEn     DateTime @default(now()) @map("creado_en")
+
+  inspeccion Inspeccion          @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  detalle    InspeccionDetalle?  @relation(fields: [detalleId], references: [id])
+  evidencias HallazgoEvidencia[]
+  acciones   AccionCorrectiva[]
+
+  @@index([inspeccionId])
+  @@index([empresaId, severidad])
+  @@map("hallazgo")
+}
+
+/// Evidencia adjunta al momento de detectar un hallazgo (mismo patrón que `InspeccionEvidencia`).
+model HallazgoEvidencia {
+  id          String   @id @default(uuid())
+  hallazgoId  String   @map("hallazgo_id")
+  tipo        String
+  url         String
+  nombre      String
+  tamanoBytes Int?     @map("tamano_bytes")
+  creadoEn    DateTime @default(now()) @map("creado_en")
+
+  hallazgo Hallazgo @relation(fields: [hallazgoId], references: [id], onDelete: Cascade)
+
+  @@index([hallazgoId])
+  @@map("hallazgo_evidencia")
+}
+
+/// Cabecera del plan de cumplimiento de una certificación — se crea cuando hay ≥1 hallazgo.
+model PlanCumplimiento {
+  id           String    @id @default(uuid())
+  inspeccionId String    @unique @map("inspeccion_id")
+  estado       String    @default("EN_SEGUIMIENTO") @db.VarChar(20) // EN_SEGUIMIENTO | CERRADO | REABIERTO
+  cerradoPorId String?   @map("cerrado_por_id")
+  cerradoEn    DateTime? @map("cerrado_en")
+  creadoEn     DateTime  @default(now()) @map("creado_en")
+
+  inspeccion Inspeccion         @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  cerradoPor Usuario?           @relation("PlanesCerrados", fields: [cerradoPorId], references: [id])
+  acciones   AccionCorrectiva[]
+
+  @@map("plan_cumplimiento")
+}
+
+/// Acción correctiva de un hallazgo dentro de un plan de cumplimiento.
+model AccionCorrectiva {
+  id                     String    @id @default(uuid())
+  planCumplimientoId     String    @map("plan_cumplimiento_id")
+  hallazgoId             String    @map("hallazgo_id")
+  descripcion            String
+  responsableId          String    @map("responsable_id")
+  fechaLimite            DateTime  @map("fecha_limite") @db.Date
+  estado                 String    @default("PENDIENTE") @db.VarChar(20)
+  porcentajeAvance       Int       @default(0) @map("porcentaje_avance")
+  verificadoPorId        String?   @map("verificado_por_id")
+  verificadoEn           DateTime? @map("verificado_en")
+  comentarioVerificacion String?   @map("comentario_verificacion")
+  creadoEn               DateTime  @default(now()) @map("creado_en")
+  actualizadoEn          DateTime  @updatedAt @map("actualizado_en")
+
+  planCumplimiento PlanCumplimiento            @relation(fields: [planCumplimientoId], references: [id], onDelete: Cascade)
+  hallazgo         Hallazgo                    @relation(fields: [hallazgoId], references: [id])
+  responsable      Usuario                     @relation("AccionesResponsable", fields: [responsableId], references: [id])
+  verificadoPor    Usuario?                    @relation("AccionesVerificadas", fields: [verificadoPorId], references: [id])
+  evidencias       AccionCorrectivaEvidencia[]
+
+  @@index([planCumplimientoId])
+  @@index([hallazgoId])
+  @@index([responsableId, estado])
+  @@index([fechaLimite])
+  @@map("accion_correctiva")
+}
+
+/// Evidencia de avance cargada por el responsable de una acción correctiva.
+model AccionCorrectivaEvidencia {
+  id                 String   @id @default(uuid())
+  accionCorrectivaId String   @map("accion_correctiva_id")
+  tipo               String
+  url                String
+  nombre             String
+  comentario         String?
+  creadoEn           DateTime @default(now()) @map("creado_en")
+
+  accionCorrectiva AccionCorrectiva @relation(fields: [accionCorrectivaId], references: [id], onDelete: Cascade)
+
+  @@index([accionCorrectivaId])
+  @@map("accion_correctiva_evidencia")
 }
 
 /// RF-12 — Auditoría de cambios en configuración

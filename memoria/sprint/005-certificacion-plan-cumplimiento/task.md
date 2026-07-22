@@ -1,8 +1,7 @@
-# Tareas — 005-certificacion-plan-cumplimiento (⏸️ PAUSADO)
+# Tareas — 005-certificacion-plan-cumplimiento (✅ IMPLEMENTADO 2026-07-21)
 
-> **No implementar sin decisión explícita del usuario.** Este listado es referencia de diseño para cuando se retome la firma digital — no es trabajo activo. Ver nota de pausa en `spec.md`.
-> Numeración `T-650` a `T-669` — se renumeró desde el rango original `T-200`–`T-239` porque ese rango ahora pertenece a [[015-wizard-certificacion]] (la parte del wizard que se separó de este sprint). No colisiona con ningún otro sprint activo (ver rangos en `memoria/estado.md`).
-> Depende de que [[015-wizard-certificacion]] esté implementado (necesita una certificación con respuestas ya guardadas para poder firmarla).
+> Numeración `T-650` a `T-669` — se renumeró desde el rango original `T-200`–`T-239` porque ese rango ahora pertenece a [[015-wizard-certificacion]] (la parte del wizard que se separó de este sprint).
+> Ver `impl.md`/`checklist.md` para el detalle real de implementación y las desviaciones respecto a este listado (generación del código de verificación en TS en vez de en el SP, pdfkit en vez de Puppeteer, `GET .../pdf` retorna `{ url }` en vez de stream binario).
 
 ---
 

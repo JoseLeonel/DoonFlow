@@ -245,6 +245,10 @@ Un agente de dominio **no redefine** convenciones técnicas transversales (no cr
 
 ## Convenciones de código
 
+### Sin componentes ni librerías deprecadas
+
+Ningún agente introduce ni reutiliza un componente, paquete npm, API o campo de base de datos que esté en estado deprecado (marcado `@deprecated`, con advertencia de deprecación del propio paquete al instalarlo, o documentado como reemplazado en `memoria/`). Si `pnpm install` reporta una advertencia de deprecación para una dependencia candidata, se busca la alternativa mantenida en su lugar. Un campo ya deprecado por un sprint anterior y conservado solo por historial (ej. `Inspeccion.establecimiento`, reemplazado por `sucursalId` desde 015-wizard-certificacion) no se toca ni se reutiliza en código nuevo, pero tampoco se elimina de oficio salvo pedido explícito del usuario.
+
 ### Idioma
 - **Todo en español**: nombres de variables, funciones, clases, tablas de BD, comentarios y documentación.
 - Excepción: palabras técnicas universales (`id`, `token`, `status`, `url`, `slug`) se mantienen en inglés.

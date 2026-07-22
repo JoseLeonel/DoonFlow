@@ -9,10 +9,10 @@ import { BannerEstadoConexion } from "../../_components/banner-estado-conexion";
 
 export default function PaginaRevisionCertificacion() {
   const { id } = useParams<{ id: string }>();
-  const { resumen, cargando, error, haySeccionesIncompletas, guardarYFinalizar, volverASeccion } = usarRevisionCertificacion(id);
-  // Informativo únicamente — este sprint no agrega un botón "Firmar y certificar" que bloquear
-  // (lo agrega 005-certificacion-plan-cumplimiento, pausado; T-501 queda parcialmente bloqueado
-  // por esa razón, ver impl.md). Mostrar pendientes aquí sí es útil y no depende de 005.
+  const {
+    resumen, certificacion, cargando, error, haySeccionesIncompletas,
+    puedeFirmar, firmando, errorFirma, firmar, guardarYFinalizar, volverASeccion,
+  } = usarRevisionCertificacion(id);
   const capturaOffline = usarCapturaOffline(id);
 
   if (cargando) {
@@ -94,15 +94,52 @@ export default function PaginaRevisionCertificacion() {
           </div>
         </div>
 
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={guardarYFinalizar}
-            className="rounded-lg bg-primary px-8 py-2.5 text-sm font-medium text-white hover:bg-opacity-90"
-          >
-            Guardar y finalizar
-          </button>
-        </div>
+        {certificacion?.estado === "FIRMADA" ? (
+          <div className="mb-6 rounded-[10px] bg-white p-6 shadow-1 dark:bg-gray-dark dark:shadow-card">
+            <h2 className="mb-3 text-heading-6 font-bold text-dark dark:text-white">Certificación firmada</h2>
+            <p className="mb-1 text-body-sm text-dark-4 dark:text-dark-6">
+              Código de verificación: <span className="font-mono font-medium text-dark dark:text-white">{certificacion.codigoVerificacion}</span>
+            </p>
+            {certificacion.fechaVencimiento && (
+              <p className="mb-4 text-body-sm text-dark-4 dark:text-dark-6">
+                Vigente hasta: {new Date(certificacion.fechaVencimiento).toLocaleDateString()}
+              </p>
+            )}
+            {certificacion.pdfUrl && (
+              <a
+                href={certificacion.pdfUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block rounded-lg bg-primary px-6 py-2.5 text-sm font-medium text-white hover:bg-opacity-90"
+              >
+                Descargar PDF
+              </a>
+            )}
+          </div>
+        ) : (
+          <>
+            {errorFirma && (
+              <p className="mb-4 rounded-lg bg-red-light-4 px-4 py-2.5 text-body-sm text-red-dark">{errorFirma}</p>
+            )}
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={guardarYFinalizar}
+                className="rounded-lg border border-stroke px-6 py-2.5 text-sm font-medium text-dark hover:bg-gray-1 dark:border-dark-3 dark:text-white dark:hover:bg-dark-2"
+              >
+                Guardar y finalizar
+              </button>
+              <button
+                type="button"
+                disabled={!puedeFirmar || firmando || capturaOffline.pendientes > 0}
+                onClick={() => firmar(capturaOffline.pendientes)}
+                className="rounded-lg bg-primary px-8 py-2.5 text-sm font-medium text-white hover:bg-opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {firmando ? "Firmando..." : "Firmar y certificar"}
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   );

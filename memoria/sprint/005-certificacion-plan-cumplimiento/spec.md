@@ -1,7 +1,7 @@
 # Especificación — 005-certificacion-plan-cumplimiento
 
-> ## ⏸️ PAUSADO — no implementar todavía
-> A pedido explícito del usuario (2026-07-16): **la firma digital no se implementa por ahora.** Este documento queda como referencia de diseño para cuando se retome, pero no es parte del trabajo activo. La HU-1 original de este sprint (el wizard de captura de respuestas) se separó a **[[015-wizard-certificacion]]**, que es la HU principal activa del desarrollo y **no depende de este sprint** para funcionar — el formulario se completa y guarda sin firma. Este sprint (005) ahora depende de 015 (necesita que exista el formulario ya completado para poder firmarlo).
+> ## ✅ IMPLEMENTADO (2026-07-21)
+> Retomado a pedido explícito del usuario el 2026-07-21 (eligió esto en vez de continuar con el sprint 014). Ver `impl.md`/`checklist.md` para el detalle técnico y las desviaciones respecto a este documento. La HU-1 original de este sprint (el wizard de captura de respuestas) sigue viviendo en **[[015-wizard-certificacion]]**, ya implementado — este sprint solo agregó el paso de firma sobre eso.
 
 ## Historia de usuario
 

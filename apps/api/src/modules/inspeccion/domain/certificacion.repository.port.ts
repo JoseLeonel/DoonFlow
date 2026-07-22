@@ -33,6 +33,8 @@ export interface DatosRespuestaGuardar {
 export interface DetalleGuardado {
   id: string;
   nodoId: string;
+  /** 013-hallazgos-plan-cumplimiento — usado como base de la descripción de hallazgos automáticos. */
+  preguntaTitulo: string;
   valor: string | null;
   valores: string[];
   comentario: string | null;
@@ -46,6 +48,8 @@ export interface EvidenciaGuardada {
   tipo: string;
   url: string;
   nombre: string;
+  /** 013-hallazgos-plan-cumplimiento — necesario para la galería de evidencias consolidada. */
+  creadoEn: Date;
 }
 
 export interface CertificacionCompleta extends Certificacion {
@@ -112,4 +116,16 @@ export interface CertificacionRepositoryPort {
 
   /** 012-captura-offline-campo — marca la certificación como sincronizada por completo. */
   marcarSincronizado(inspeccionId: string, empresaId: string, fecha: Date, capturaOffline: boolean): Promise<void>;
+
+  /**
+   * 005-certificacion-plan-cumplimiento — firma la certificación vía `sp_inspeccion_firmar`:
+   * recalcula puntaje/porcentaje/clasificación, fija `resultadoFinal` y `fechaVencimiento`,
+   * y persiste el código de verificación dado. Lanza si la fila no existe, si `estado` no es
+   * `EN_PROGRESO`, o si `codigoVerificacion` colisiona con uno existente (el caso de uso decide
+   * si reintenta con un código nuevo).
+   */
+  firmar(inspeccionId: string, usuarioId: string, codigoVerificacion: string): Promise<Certificacion>;
+
+  /** 005-certificacion-plan-cumplimiento — persiste la URL del PDF ya generado tras la firma. */
+  establecerPdfUrl(inspeccionId: string, pdfUrl: string): Promise<Certificacion>;
 }

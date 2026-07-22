@@ -36,6 +36,8 @@ function certificacionCompleta(parcial: Partial<CertificacionCompleta> = {}): Ce
     fechaInicio: new Date(), fechaFin: null, puntajeObtenido: 0, puntajeMaximo: 100,
     porcentajeCumplimiento: 0, clasificacion: null, observaciones: null,
     capturaOffline: false, sincronizadoEn: null,
+    firmadoPorId: null, firmadoEn: null, codigoVerificacion: null, pdfUrl: null,
+    fechaVencimiento: null, resultadoFinal: null,
     creadoEn: new Date(), actualizadoEn: new Date(),
     plantilla: { id: "p1", nombre: "Ficha", puntajeMaximo: 100, nodos: [seccion("s1", [nodoPregunta("n1")])], rangosResultado: [] },
     detalles: [], evidencias: [],

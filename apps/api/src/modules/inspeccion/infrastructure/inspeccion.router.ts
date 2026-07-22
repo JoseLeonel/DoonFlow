@@ -1,12 +1,18 @@
 import { Router } from "express";
 import type { PlantillaController } from "./plantilla.controller";
 import type { CertificacionController } from "./certificacion.controller";
+import type { HallazgoController } from "./hallazgo.controller";
+import type { PlanCumplimientoController } from "./plan-cumplimiento.controller";
+import type { AccionCorrectivaController } from "./accion-correctiva.controller";
 import { subidaArchivoEvidencia } from "./subida-archivo.middleware";
 import type { RequestHandler } from "express";
 
 export function crearInspeccionRouter(
   ctrl: PlantillaController,
   ctrlCertificacion: CertificacionController,
+  ctrlHallazgo: HallazgoController,
+  ctrlPlanCumplimiento: PlanCumplimientoController,
+  ctrlAccionCorrectiva: AccionCorrectivaController,
   autenticar: RequestHandler,
   resolverAlcance: RequestHandler,
   requiereEnviarRevision: RequestHandler,
@@ -53,6 +59,32 @@ export function crearInspeccionRouter(
   r.post  ("/certificaciones/:id/sincronizacion",             resolverAlcance, ctrlCertificacion.sincronizarLote);
   r.post  ("/certificaciones/:id/sincronizacion/evidencias",  resolverAlcance, subidaArchivoEvidencia, ctrlCertificacion.sincronizarEvidencia);
   r.get   ("/certificaciones/:id/sincronizacion/estado",      resolverAlcance, ctrlCertificacion.obtenerEstadoSincronizacion);
+
+  // Firma (005-certificacion-plan-cumplimiento, retomado)
+  r.post  ("/certificaciones/:id/firmar",  resolverAlcance, ctrlCertificacion.firmar);
+  r.get   ("/certificaciones/:id/pdf",     resolverAlcance, ctrlCertificacion.obtenerPdf);
+
+  // Hallazgos y plan de cumplimiento (013-hallazgos-plan-cumplimiento)
+  r.get   ("/certificaciones/:id/evidencias",                  resolverAlcance, ctrlAccionCorrectiva.evidenciasConsolidadas);
+  r.get   ("/certificaciones/:id/hallazgos",                   resolverAlcance, ctrlHallazgo.listar);
+  r.post  ("/certificaciones/:id/hallazgos",                   resolverAlcance, ctrlHallazgo.crear);
+  r.post  ("/certificaciones/:id/hallazgos/generar-automaticos", resolverAlcance, ctrlHallazgo.generarAutomaticos);
+  r.patch ("/hallazgos/:id",              ctrlHallazgo.actualizar);
+  r.post  ("/hallazgos/:id/evidencias",   subidaArchivoEvidencia, ctrlHallazgo.adjuntarEvidencia);
+
+  r.post  ("/certificaciones/:id/plan-cumplimiento", resolverAlcance, ctrlPlanCumplimiento.generar);
+  r.get   ("/certificaciones/:id/plan-cumplimiento", resolverAlcance, ctrlPlanCumplimiento.obtener);
+  r.post  ("/plan-cumplimiento/:id/acciones", ctrlPlanCumplimiento.crearAccion);
+  r.post  ("/plan-cumplimiento/:id/cerrar",   ctrlPlanCumplimiento.cerrar);
+  r.post  ("/plan-cumplimiento/:id/reabrir",  ctrlPlanCumplimiento.reabrir);
+
+  r.get   ("/mis-acciones",               resolverAlcance, ctrlAccionCorrectiva.misAcciones);
+  r.get   ("/acciones-en-revision",       resolverAlcance, ctrlAccionCorrectiva.accionesEnRevision);
+  r.patch ("/acciones/:id",               ctrlAccionCorrectiva.actualizar);
+  r.patch ("/acciones/:id/avance",        resolverAlcance, ctrlAccionCorrectiva.actualizarAvance);
+  r.post  ("/acciones/:id/evidencias",    resolverAlcance, subidaArchivoEvidencia, ctrlAccionCorrectiva.adjuntarEvidencia);
+  r.post  ("/acciones/:id/enviar-revision", resolverAlcance, ctrlAccionCorrectiva.enviarARevision);
+  r.post  ("/acciones/:id/verificar",     ctrlAccionCorrectiva.verificar);
 
   return r;
 }

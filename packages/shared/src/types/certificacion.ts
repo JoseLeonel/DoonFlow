@@ -1,12 +1,10 @@
 import type { NodoArbol, RangoResultado } from "./inspeccion";
 
 /**
- * Certificación (ampliación de `Inspeccion`) — solo los campos de 015-wizard-certificacion.
- * Sin campos de firma (`firmadoPorId`, `codigoVerificacion`, `pdfUrl`, etc.) — esos
- * pertenecen a [[005-certificacion-plan-cumplimiento]], pausado. Cuando se retome, este
- * archivo se AMPLÍA (no se reemplaza) con esos campos.
+ * Certificación (ampliación de `Inspeccion`) — incluye los campos de firma de
+ * [[005-certificacion-plan-cumplimiento]] (retomado 2026-07-21).
  */
-export type EstadoCertificacion = "EN_PROGRESO";
+export type EstadoCertificacion = "EN_PROGRESO" | "FIRMADA";
 
 export interface Certificacion {
   id: string;
@@ -28,6 +26,15 @@ export interface Certificacion {
   capturaOffline: boolean;
   /** 012-captura-offline-campo — última vez que un lote de sincronización se procesó sin dejar pendientes. */
   sincronizadoEn: string | null;
+  /** 005-certificacion-plan-cumplimiento — quién/cuándo firmó. `null` mientras está en borrador. */
+  firmadoPorId: string | null;
+  firmadoEn: string | null;
+  /** 005-certificacion-plan-cumplimiento — único en todo el sistema, no solo por empresa. */
+  codigoVerificacion: string | null;
+  pdfUrl: string | null;
+  fechaVencimiento: string | null;
+  /** 005-certificacion-plan-cumplimiento — fijo en `APROBADA` hasta que 013 calcule el valor real por severidad. */
+  resultadoFinal: string | null;
   creadoEn: string;
   actualizadoEn: string;
 }

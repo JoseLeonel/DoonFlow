@@ -3,25 +3,35 @@ import { respuestaExitosa } from "../../../shared/sobre-respuesta";
 import { ErrorHttp } from "../../../shared/error-http";
 import {
   ArchivoNoPermitidoError,
+  CertificacionConHallazgoCriticoError,
   CertificacionNoEditableError,
+  CodigoVerificacionEnColisionError,
   InspeccionNoEncontradaError,
   LoteSincronizacionExcedeLimiteError,
   PlantillaInactivaError,
   PlantillaNoEncontradaError,
   RespuestaNoSincronizadaError,
+  SincronizacionPendienteError,
   SucursalFueraDeAlcanceError,
   SucursalRequeridaError,
 } from "../domain/inspeccion.errors";
-import { iniciarCertificacionSchema, guardarRespuestasSeccionSchema, sincronizarLoteSchema } from "../application/certificacion.schema";
+import {
+  iniciarCertificacionSchema,
+  guardarRespuestasSeccionSchema,
+  sincronizarLoteSchema,
+  firmarCertificacionSchema,
+} from "../application/certificacion.schema";
 import type { IniciarCertificacionUseCase } from "../application/casos-uso/iniciar-certificacion.usecase";
 import type { ResponderCertificacionUseCase } from "../application/casos-uso/responder-certificacion.usecase";
 import type { SincronizarCapturaOfflineUseCase } from "../application/casos-uso/sincronizar-captura-offline.usecase";
+import type { FirmarCertificacionUseCase } from "../application/casos-uso/firmar-certificacion.usecase";
 
 export class CertificacionController {
   constructor(
     private readonly iniciarUc: IniciarCertificacionUseCase,
     private readonly responderUc: ResponderCertificacionUseCase,
     private readonly sincronizarUc: SincronizarCapturaOfflineUseCase,
+    private readonly firmarUc: FirmarCertificacionUseCase,
   ) {}
 
   iniciar = async (req: Request, res: Response, next: NextFunction) => {
@@ -128,6 +138,30 @@ export class CertificacionController {
     } catch (e) { next(this.m(e)); }
   };
 
+  // ── Firma (005-certificacion-plan-cumplimiento, retomado) ────────────────
+
+  firmar = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = firmarCertificacionSchema.parse(req.body);
+      const certificacion = await this.firmarUc.ejecutar(
+        req.params["id"]!,
+        req.usuario!.empresaId,
+        req.usuario!.id,
+        input,
+        req.alcance,
+      );
+      res.json(respuestaExitosa(certificacion));
+    } catch (e) { next(this.m(e)); }
+  };
+
+  obtenerPdf = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const certificacion = await this.responderUc.obtenerCompleta(req.params["id"]!, req.usuario!.empresaId, req.alcance);
+      if (!certificacion.pdfUrl) throw new ErrorHttp(404, "pdf_no_disponible", "Esta certificación todavía no tiene un PDF generado.");
+      res.json(respuestaExitosa({ url: certificacion.pdfUrl }));
+    } catch (e) { next(this.m(e)); }
+  };
+
   private m(e: unknown) {
     if (e instanceof PlantillaNoEncontradaError)   return new ErrorHttp(404, "plantilla_no_encontrada", e.message);
     if (e instanceof PlantillaInactivaError)       return new ErrorHttp(422, "plantilla_inactiva", e.message);
@@ -138,6 +172,9 @@ export class CertificacionController {
     if (e instanceof ArchivoNoPermitidoError)      return new ErrorHttp(422, "archivo_no_permitido", e.message);
     if (e instanceof LoteSincronizacionExcedeLimiteError) return new ErrorHttp(413, "lote_excede_limite", e.message);
     if (e instanceof RespuestaNoSincronizadaError) return new ErrorHttp(409, "respuesta_no_sincronizada", e.message);
+    if (e instanceof SincronizacionPendienteError) return new ErrorHttp(409, "sincronizacion_pendiente", e.message);
+    if (e instanceof CodigoVerificacionEnColisionError) return new ErrorHttp(500, "codigo_verificacion_colision", e.message);
+    if (e instanceof CertificacionConHallazgoCriticoError) return new ErrorHttp(409, "hallazgo_critico_pendiente", e.message);
     return e;
   }
 }

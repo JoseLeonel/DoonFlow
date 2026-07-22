@@ -33,8 +33,49 @@ function mapCertificacion(i: any): Certificacion {
     observaciones: i.observaciones ?? null,
     capturaOffline: i.capturaOffline,
     sincronizadoEn: i.sincronizadoEn ?? null,
+    firmadoPorId: i.firmadoPorId ?? null,
+    firmadoEn: i.firmadoEn ?? null,
+    codigoVerificacion: i.codigoVerificacion ?? null,
+    pdfUrl: i.pdfUrl ?? null,
+    fechaVencimiento: i.fechaVencimiento ?? null,
+    resultadoFinal: i.resultadoFinal ?? null,
     creadoEn: i.creadoEn,
     actualizadoEn: i.actualizadoEn,
+  };
+}
+
+/**
+ * Mapea el resultado crudo de `sp_inspeccion_firmar` (columnas `snake_case` tal como las
+ * devuelve Postgres vía `$queryRaw` — a diferencia de `prisma.inspeccion.*`, que sí las
+ * mapea a camelCase automáticamente por el `@map()` del schema).
+ */
+function mapCertificacionCruda(i: any): Certificacion {
+  return {
+    id: i.id,
+    empresaId: i.empresa_id,
+    plantillaId: i.plantilla_id,
+    plantillaVersion: i.plantilla_version,
+    inspectorId: i.inspector_id,
+    sucursalId: i.sucursal_id ?? null,
+    periodoEtiqueta: i.periodo_etiqueta ?? null,
+    estado: i.estado,
+    fechaInicio: i.fecha_inicio,
+    fechaFin: i.fecha_fin ?? null,
+    puntajeObtenido: Number(i.puntaje_obtenido),
+    puntajeMaximo: Number(i.puntaje_maximo),
+    porcentajeCumplimiento: Number(i.porcentaje_cumplimiento),
+    clasificacion: i.clasificacion ?? null,
+    observaciones: i.observaciones ?? null,
+    capturaOffline: i.captura_offline,
+    sincronizadoEn: i.sincronizado_en ?? null,
+    firmadoPorId: i.firmado_por_id ?? null,
+    firmadoEn: i.firmado_en ?? null,
+    codigoVerificacion: i.codigo_verificacion ?? null,
+    pdfUrl: i.pdf_url ?? null,
+    fechaVencimiento: i.fecha_vencimiento ?? null,
+    resultadoFinal: i.resultado_final ?? null,
+    creadoEn: i.creado_en,
+    actualizadoEn: i.actualizado_en,
   };
 }
 
@@ -42,6 +83,7 @@ function mapDetalle(d: any): DetalleGuardado {
   return {
     id: d.id,
     nodoId: d.nodoId,
+    preguntaTitulo: d.preguntaTitulo,
     valor: d.respuestaValor ?? null,
     valores: d.respuestasMultiples ?? [],
     comentario: d.comentario ?? null,
@@ -51,7 +93,7 @@ function mapDetalle(d: any): DetalleGuardado {
 }
 
 function mapEvidencia(e: any): EvidenciaGuardada {
-  return { id: e.id, detalleId: e.detalleId ?? null, tipo: e.tipo, url: e.url, nombre: e.nombre };
+  return { id: e.id, detalleId: e.detalleId ?? null, tipo: e.tipo, url: e.url, nombre: e.nombre, creadoEn: e.creadoEn };
 }
 
 export class CertificacionPrismaRepository implements CertificacionRepositoryPort {
@@ -240,5 +282,21 @@ export class CertificacionPrismaRepository implements CertificacionRepositoryPor
       where: { id: inspeccionId, empresaId },
       data: { sincronizadoEn: fecha, ...(capturaOffline ? { capturaOffline: true } : {}) },
     });
+  }
+
+  // ── Firma (005-certificacion-plan-cumplimiento, retomado) ────────────────
+
+  async firmar(inspeccionId: string, usuarioId: string, codigoVerificacion: string): Promise<Certificacion> {
+    const filas = await this.prisma.$queryRaw<any[]>`
+      SELECT * FROM sp_inspeccion_firmar(${inspeccionId}, ${usuarioId}, ${codigoVerificacion})
+    `;
+    const fila = filas[0];
+    if (!fila) throw new Error(`No se pudo firmar la certificación ${inspeccionId}.`);
+    return mapCertificacionCruda(fila);
+  }
+
+  async establecerPdfUrl(inspeccionId: string, pdfUrl: string): Promise<Certificacion> {
+    const i = await this.prisma.inspeccion.update({ where: { id: inspeccionId }, data: { pdfUrl } });
+    return mapCertificacion(i);
   }
 }
