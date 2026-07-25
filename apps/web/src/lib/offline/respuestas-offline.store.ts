@@ -8,7 +8,9 @@ export interface RespuestaOffline {
   nodoId: string;
   valor?: string | null;
   valores?: string[];
-  comentario?: string | null;
+  comentarioReconocimiento?: string | null;
+  comentarioObservacion?: string | null;
+  comentarioOportunidadMejora?: string | null;
   capturadoEnCliente: string;
   estadoSync: EstadoSync;
 }
@@ -18,7 +20,9 @@ export type DatosRespuestaOffline = {
   nodoId: string;
   valor?: string | null;
   valores?: string[];
-  comentario?: string | null;
+  comentarioReconocimiento?: string | null;
+  comentarioObservacion?: string | null;
+  comentarioOportunidadMejora?: string | null;
 };
 
 /** Guarda una respuesta localmente — el mismo `(inspeccionId, nodoId)` sobrescribe la fila anterior (evita acumular versiones intermedias). */
@@ -33,7 +37,9 @@ export async function guardarRespuestaLocal(datos: DatosRespuestaOffline): Promi
     nodoId: datos.nodoId,
     valor: datos.valor ?? null,
     valores: datos.valores ?? [],
-    comentario: datos.comentario ?? null,
+    comentarioReconocimiento: datos.comentarioReconocimiento ?? null,
+    comentarioObservacion: datos.comentarioObservacion ?? null,
+    comentarioOportunidadMejora: datos.comentarioOportunidadMejora ?? null,
     capturadoEnCliente: new Date().toISOString(),
     estadoSync: "PENDIENTE",
   };

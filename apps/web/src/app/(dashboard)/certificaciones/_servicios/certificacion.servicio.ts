@@ -27,7 +27,9 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 export interface DatosIniciarCertificacion {
   plantillaId: string;
   sucursalId: string;
-  periodoEtiqueta: string;
+  fechaInicioPeriodo: string;
+  fechaFinPeriodo: string;
+  planId?: string;
 }
 
 export async function iniciarCertificacion(datos: DatosIniciarCertificacion): Promise<Certificacion> {
@@ -66,7 +68,9 @@ export interface DatosRespuesta {
   nodoId: string;
   valor?: string | null;
   valores?: string[];
-  comentario?: string | null;
+  comentarioReconocimiento?: string | null;
+  comentarioObservacion?: string | null;
+  comentarioOportunidadMejora?: string | null;
 }
 
 export async function guardarRespuestasSeccion(
@@ -158,6 +162,23 @@ export async function firmarCertificacion(
   });
 }
 
+/** Cierre liviano ("Guardar y finalizar", 2026-07-24) — sin PDF/código de verificación. */
+export async function finalizarCertificacion(
+  certificacionId: string,
+  pendientesSincronizacion: number,
+): Promise<Certificacion> {
+  return apiFetch<Certificacion>(`/certificaciones/${certificacionId}/finalizar`, {
+    method: "POST",
+    body: JSON.stringify({ pendientesSincronizacion }),
+  });
+}
+
 export async function obtenerPdfCertificacion(certificacionId: string): Promise<{ url: string }> {
   return apiFetch<{ url: string }>(`/certificaciones/${certificacionId}/pdf`);
+}
+
+// ── Aceptación del cliente (011-aceptacion-apelaciones-certificacion) ──────
+
+export async function aceptarCertificacion(certificacionId: string): Promise<Certificacion> {
+  return apiFetch<Certificacion>(`/certificaciones/${certificacionId}/aceptar`, { method: "POST" });
 }

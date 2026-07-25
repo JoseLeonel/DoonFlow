@@ -3,18 +3,18 @@ import userEvent from "@testing-library/user-event";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import PaginaMiSucursal from "../page";
 import { obtenerSesionActual } from "../../../../lib/sesion.servicio";
-import { usarHistoricoSucursal } from "../../mantenimientos/clientes/_hooks/usar-historico-sucursal";
+import { useHistoricoSucursal } from "../../mantenimientos/clientes/_hooks/use-historico-sucursal";
 
 vi.mock("../../../../lib/sesion.servicio", () => ({
   obtenerSesionActual: vi.fn(),
 }));
 
-vi.mock("../../mantenimientos/clientes/_hooks/usar-historico-sucursal", () => ({
-  usarHistoricoSucursal: vi.fn(),
+vi.mock("../../mantenimientos/clientes/_hooks/use-historico-sucursal", () => ({
+  useHistoricoSucursal: vi.fn(),
 }));
 
 const obtenerSesionActualMock = vi.mocked(obtenerSesionActual);
-const usarHistoricoSucursalMock = vi.mocked(usarHistoricoSucursal);
+const usarHistoricoSucursalMock = vi.mocked(useHistoricoSucursal);
 
 describe("PaginaMiSucursal", () => {
   beforeEach(() => {

@@ -10,10 +10,6 @@ export type TipoRespuesta =
 
 export type ModalidadPuntaje = "FIJO" | "PARCIAL" | "MANUAL" | "POR_OPCIONES";
 
-export type ReglaComentario =
-  | "NUNCA" | "SIEMPRE" | "CUANDO_NEGATIVO"
-  | "CUANDO_PUNTAJE_MENOR_MAXIMO" | "CONFIGURABLE";
-
 /** 007-gobernanza-permisos-aprobacion — flujo de aprobación de una plantilla. */
 export type EstadoAprobacionPlantilla = "BORRADOR" | "EN_REVISION" | "APROBADA" | "RECHAZADA";
 
@@ -68,7 +64,6 @@ export interface NodoArbol {
   tipoRespuesta?: TipoRespuesta;
   modalidadPuntaje?: ModalidadPuntaje;
   puntajeMaximo: number;
-  reglaComentario: ReglaComentario;
   evidenciaObligatoria: boolean;
   evidenciaMinima: number;
   evidenciaMaxima: number;

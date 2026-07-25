@@ -1,7 +1,7 @@
 "use client";
 
 import type { Plantilla } from "@doonflow/shared";
-import type { ModoEditor } from "../_hooks/usar-editor-plantilla";
+import type { ModoEditor } from "../_hooks/use-editor-plantilla";
 import { BadgeEstadoAprobacion } from "./badge-estado-aprobacion";
 
 const ETIQUETAS_TIPO: Record<string, string> = {

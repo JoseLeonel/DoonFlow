@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, type JSX } from "react";
 import { cn } from "@doonflow/shared";
-import { usarContextoSidebar } from "./sidebar-contexto";
+import type { RolSistema } from "@doonflow/shared";
+import { useContextoSidebar } from "./sidebar-contexto";
+import { obtenerSesionActual } from "../../../lib/sesion.servicio";
 
 // ── Iconos SVG inline ─────────────────────────────────────────────────────────
 
@@ -56,14 +58,6 @@ function IconoFinca({ className }: { className?: string }) {
   );
 }
 
-function IconoInventario({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="m20.25 7.5-.625 10.632a2.25 2.25 0 0 1-2.247 2.118H6.622a2.25 2.25 0 0 1-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125Z" />
-    </svg>
-  );
-}
-
 function IconoAnalytics({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -108,6 +102,22 @@ function IconoAuditoria({ className }: { className?: string }) {
   );
 }
 
+function IconoPlanificacion({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+    </svg>
+  );
+}
+
+function IconoIntegraciones({ className }: { className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 0 1 1.242 7.244l-4.5 4.5a4.5 4.5 0 0 1-6.364-6.364l1.757-1.757m13.35-.622 1.757-1.757a4.5 4.5 0 0 0-6.364-6.364l-4.5 4.5a4.5 4.5 0 0 0 1.242 7.244" />
+    </svg>
+  );
+}
+
 function IconoRetencion({ className }: { className?: string }) {
   return (
     <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -118,30 +128,42 @@ function IconoRetencion({ className }: { className?: string }) {
 
 // ── Datos de navegación ───────────────────────────────────────────────────────
 
-interface SubItem { titulo: string; href: string; Icono?: ({ className }: { className?: string }) => JSX.Element }
-interface NavItem  { titulo: string; href: string; Icono: ({ className }: { className?: string }) => JSX.Element; subItems?: SubItem[] }
+interface SubItem { titulo: string; href: string; Icono?: ({ className }: { className?: string }) => JSX.Element; roles?: RolSistema[] }
+interface NavItem  { titulo: string; href: string; Icono: ({ className }: { className?: string }) => JSX.Element; subItems?: SubItem[]; roles?: RolSistema[] }
 interface NavGrupo { seccion: string; items: NavItem[] }
 
+/**
+ * `roles` ausente = visible para todos los roles autenticados. Cuando está presente, refleja
+ * restricciones ya impuestas por el backend (`middleware.ts` de este mismo proyecto, o el guard
+ * de rol/permiso del endpoint) — no son restricciones nuevas inventadas aquí, solo se ocultan
+ * ítems que de todas formas devolverían 403/redirect para ese rol (encontrado con pruebas E2E
+ * reales en Chrome el 2026-07-24: antes el menú se mostraba completo a cualquier rol).
+ */
 const NAV: NavGrupo[] = [
   {
     seccion: "PRINCIPAL",
     items: [
       { titulo: "Inicio",        href: "/",              Icono: IconoHome },
+      { titulo: "Mi empresa",    href: "/mi-empresa",    Icono: IconoClientes, roles: ["administrador_cliente"] },
+      { titulo: "Mi sucursal",   href: "/mi-sucursal",   Icono: IconoFinca, roles: ["usuario_sucursal"] },
     ],
   },
   {
     seccion: "CALIDAD",
     items: [
-      { titulo: "Inspecciones",  href: "/inspecciones",  Icono: IconoInspeccion },
-      { titulo: "Aprobaciones",  href: "/inspecciones/aprobaciones", Icono: IconoAprobaciones },
+      { titulo: "Plantillas",  href: "/inspecciones",  Icono: IconoInspeccion, roles: ["administrador", "auditor"] },
+      { titulo: "Aprobaciones",  href: "/inspecciones/aprobaciones", Icono: IconoAprobaciones, roles: ["administrador", "auditor"] },
+      { titulo: "Planificación", href: "/planificacion", Icono: IconoPlanificacion, roles: ["administrador", "auditor"] },
       {
         titulo: "Certificaciones",
         href: "/certificaciones",
         Icono: IconoCertificacion,
         subItems: [
-          { titulo: "Nueva certificación", href: "/certificaciones/nueva" },
+          { titulo: "Todas las certificaciones", href: "/certificaciones" },
+          { titulo: "Nueva certificación", href: "/certificaciones/nueva", roles: ["administrador", "auditor"] },
           { titulo: "Mis acciones", href: "/certificaciones/seguimiento" },
-          { titulo: "Verificación", href: "/certificaciones/verificacion" },
+          { titulo: "Verificación", href: "/certificaciones/verificacion", roles: ["administrador", "auditor"] },
+          { titulo: "Apelaciones", href: "/apelaciones", roles: ["administrador", "auditor"] },
         ],
       },
     ],
@@ -149,12 +171,11 @@ const NAV: NavGrupo[] = [
   {
     seccion: "PRODUCCIÓN",
     items: [
-      { titulo: "Fincas",        href: "/fincas",        Icono: IconoFinca },
-      { titulo: "Inventario",    href: "/inventario",    Icono: IconoInventario },
       {
         titulo: "Analytics",
         href: "/analytics",
         Icono: IconoAnalytics,
+        roles: ["administrador", "auditor", "administrador_cliente"],
         subItems: [
           { titulo: "Reportes", href: "/analytics/reportes" },
           { titulo: "Nuevo reporte", href: "/analytics/reportes/nuevo" },
@@ -169,6 +190,7 @@ const NAV: NavGrupo[] = [
         titulo: "Mantenimientos",
         href: "/mantenimientos",
         Icono: IconoMantenimiento,
+        roles: ["administrador"],
         subItems: [
           { titulo: "Clientes", href: "/mantenimientos/clientes", Icono: IconoClientes },
           { titulo: "Usuarios", href: "/mantenimientos/usuarios", Icono: IconoUsuarios },
@@ -177,9 +199,16 @@ const NAV: NavGrupo[] = [
           { titulo: "Política de retención", href: "/mantenimientos/retencion", Icono: IconoRetencion },
         ],
       },
+      { titulo: "Integraciones", href: "/configuracion/integraciones", Icono: IconoIntegraciones, roles: ["administrador"] },
     ],
   },
 ];
+
+function visiblePara(rol: RolSistema | null, roles?: RolSistema[]): boolean {
+  if (!roles) return true;
+  if (!rol) return false;
+  return roles.includes(rol);
+}
 
 // ── Logo DoonFlow ─────────────────────────────────────────────────────────────
 
@@ -245,7 +274,14 @@ function ItemMenu({
         {expandido && (
           <ul className="mt-1 space-y-0.5 pl-4">
             {subItems.map((sub) => {
-              const activoSub = pathname.startsWith(sub.href);
+              // El sub-ítem más específico (href más largo) que calza con la ruta actual es el
+              // activo — evita que un ítem "índice" (ej. href = href del padre, como "Todas las
+              // certificaciones" → /certificaciones) quede marcado activo en TODAS sus subrutas
+              // hermanas (ej. /certificaciones/nueva) por simple coincidencia de prefijo.
+              const mejorCoincidencia = subItems
+                .filter((s) => pathname === s.href || pathname.startsWith(`${s.href}/`))
+                .sort((a, b) => b.href.length - a.href.length)[0];
+              const activoSub = mejorCoincidencia?.href === sub.href;
               return (
                 <li key={sub.href}>
                   <Link
@@ -294,9 +330,26 @@ function ItemMenu({
 
 export function Sidebar() {
   const pathname = usePathname();
-  const { abierto, setAbierto, esMobile } = usarContextoSidebar();
+  const { abierto, setAbierto, esMobile } = useContextoSidebar();
+  const [rol, setRol] = useState<RolSistema | null>(null);
+
+  useEffect(() => {
+    obtenerSesionActual().then((sesion) => setRol(sesion.usuario.rol)).catch(() => {});
+  }, []);
 
   const cerrarMobile = () => { if (esMobile) setAbierto(false); };
+
+  const navFiltrado = NAV
+    .map((grupo) => ({
+      ...grupo,
+      items: grupo.items
+        .filter((item) => visiblePara(rol, item.roles))
+        .map((item) => ({
+          ...item,
+          subItems: item.subItems?.filter((sub) => visiblePara(rol, sub.roles)),
+        })),
+    }))
+    .filter((grupo) => grupo.items.length > 0);
 
   return (
     <>
@@ -325,7 +378,7 @@ export function Sidebar() {
 
           {/* Navegación */}
           <nav className="mt-8 flex-1 overflow-y-auto space-y-6">
-            {NAV.map((grupo) => (
+            {navFiltrado.map((grupo) => (
               <div key={grupo.seccion}>
                 <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-dark-4 dark:text-dark-6">
                   {grupo.seccion}

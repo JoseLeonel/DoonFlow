@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usarUsuarios } from "./_hooks/usar-usuarios";
+import { useUsuarios } from "./_hooks/use-usuarios";
 import { TablaUsuarios } from "./_components/tabla-usuarios";
 
 export default function PaginaUsuarios() {
-  const { usuarios, cargando } = usarUsuarios();
+  const { usuarios, cargando } = useUsuarios();
 
   return (
     <div className="p-6 md:p-7.5">

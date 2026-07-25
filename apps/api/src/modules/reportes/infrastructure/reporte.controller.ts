@@ -9,12 +9,22 @@ import {
 import { generarReporteSchema, listarHistorialSchema } from "../application/reporte.schema";
 import type { GenerarReporteUseCase } from "../application/casos-uso/generar-reporte.usecase";
 import type { ListarHistorialReportesUseCase } from "../application/casos-uso/listar-historial-reportes.usecase";
+import type { ObtenerPanelEjecutivoUseCase } from "../application/casos-uso/obtener-panel-ejecutivo.usecase";
 
 export class ReporteController {
   constructor(
     private readonly generarUc: GenerarReporteUseCase,
     private readonly historialUc: ListarHistorialReportesUseCase,
+    private readonly panelEjecutivoUc: ObtenerPanelEjecutivoUseCase,
   ) {}
+
+  panelEjecutivo = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const clienteId = req.query["clienteId"] as string | undefined;
+      const panel = await this.panelEjecutivoUc.ejecutar(req.usuario!.empresaId, req.alcance!, { clienteId });
+      res.json(respuestaExitosa(panel));
+    } catch (e) { next(this.m(e)); }
+  };
 
   generar = async (req: Request, res: Response, next: NextFunction) => {
     try {

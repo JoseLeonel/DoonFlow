@@ -13,10 +13,12 @@ const ETIQUETA: Record<Severidad, string> = {
 };
 
 interface PropsBadgeSeveridad {
-  severidad: Severidad;
+  /** `null` para hallazgos informativos (reconocimiento/observación/oportunidad de mejora) — no aplica severidad. */
+  severidad: Severidad | null;
 }
 
 export function BadgeSeveridad({ severidad }: PropsBadgeSeveridad) {
+  if (!severidad) return null;
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-body-xs font-medium ${ESTILO[severidad]}`}>
       {ETIQUETA[severidad]}

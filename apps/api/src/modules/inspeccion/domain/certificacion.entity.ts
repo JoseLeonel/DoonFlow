@@ -1,11 +1,15 @@
+import { formatearFechaCalendario } from "@doonflow/shared";
 import { contarPreguntas } from "./plantilla.entity";
 import type { NodoArbol, RangoResultado } from "./plantilla.entity";
 
 /**
  * Certificación (ampliación de `Inspeccion`) — incluye los campos de firma de
  * [[005-certificacion-plan-cumplimiento]] (retomado 2026-07-21).
+ * `FINALIZADA` (2026-07-24) — cierre liviano vía "Guardar y finalizar": deja de admitir
+ * respuestas nuevas y habilita hallazgos/plan de cumplimiento, pero sin PDF/código de
+ * verificación/vigencia — eso solo lo produce `FIRMADA` (firma formal).
  */
-export type EstadoCertificacion = "EN_PROGRESO" | "FIRMADA";
+export type EstadoCertificacion = "EN_PROGRESO" | "FINALIZADA" | "FIRMADA";
 
 export interface Certificacion {
   id: string;
@@ -14,7 +18,10 @@ export interface Certificacion {
   plantillaVersion: number;
   inspectorId: string;
   sucursalId: string | null;
+  /** @deprecated reemplazado por `fechaInicioPeriodo`/`fechaFinPeriodo` (2026-07-24) — solo lectura, para certificaciones creadas antes del cambio. */
   periodoEtiqueta: string | null;
+  fechaInicioPeriodo: Date | null;
+  fechaFinPeriodo: Date | null;
   estado: EstadoCertificacion;
   fechaInicio: Date;
   fechaFin: Date | null;
@@ -36,6 +43,9 @@ export interface Certificacion {
   fechaVencimiento: Date | null;
   /** 005-certificacion-plan-cumplimiento — fijo en `APROBADA` hasta que 013 calcule el valor real por severidad. */
   resultadoFinal: string | null;
+  /** 011-aceptacion-apelaciones-certificacion — reconocimiento informativo del cliente, no bloquea el certificado. */
+  aceptadoPorClienteId: string | null;
+  aceptadoEn: Date | null;
   creadoEn: Date;
   actualizadoEn: Date;
 }
@@ -53,6 +63,20 @@ export interface Certificacion {
  *   puedeFirmarse({ estado: "FIRMADA" }, 0)      // → false
  */
 export function puedeFirmarse(certificacion: { estado: string }, pendientesSincronizacion: number): boolean {
+  return certificacion.estado === "EN_PROGRESO" && pendientesSincronizacion === 0;
+}
+
+/**
+ * Indica si la certificación puede finalizarse (cierre liviano, "Guardar y finalizar" —
+ * 2026-07-24): mismas condiciones que firmar (EN_PROGRESO y todo sincronizado), pero no exige
+ * ausencia de hallazgos críticos — a diferencia de la firma formal, finalizar es solo un cierre
+ * de captura que habilita generar hallazgos/plan de cumplimiento a partir de ahí.
+ *
+ * @example
+ *   puedeFinalizarse({ estado: "EN_PROGRESO" }, 0)  // → true
+ *   puedeFinalizarse({ estado: "FINALIZADA" }, 0)   // → false
+ */
+export function puedeFinalizarse(certificacion: { estado: string }, pendientesSincronizacion: number): boolean {
   return certificacion.estado === "EN_PROGRESO" && pendientesSincronizacion === 0;
 }
 
@@ -103,6 +127,60 @@ export function calcularFechaVencimiento(firmadoEn: Date, meses = 12): Date {
  */
 export function puedeEditarRespuestas(certificacion: { estado: string }): boolean {
   return certificacion.estado === "EN_PROGRESO";
+}
+
+/**
+ * Indica si el cliente puede reconocer (aceptar) el resultado de una certificación —
+ * requiere que ya esté `FIRMADA` y que todavía no se haya aceptado antes
+ * (011-aceptacion-apelaciones-certificacion, regla 5: es informativo, no bloquea el certificado).
+ *
+ * @param certificacion - Certificación con su `estado` y `aceptadoEn` actuales.
+ * @returns `true` si `estado === "FIRMADA"` y `aceptadoEn` es `null`.
+ * @example
+ *   puedeAceptar({ estado: "FIRMADA", aceptadoEn: null })   // → true
+ *   puedeAceptar({ estado: "FIRMADA", aceptadoEn: new Date() }) // → false
+ */
+export function puedeAceptar(certificacion: { estado: string; aceptadoEn: Date | null }): boolean {
+  return certificacion.estado === "FIRMADA" && certificacion.aceptadoEn === null;
+}
+
+/**
+ * T-172 (004-usuarios-roles-alcance): `administrador_cliente` y `usuario_sucursal` permanecen
+ * de solo lectura sobre la ejecución de la ficha BPM (spec.md, "Fuera de alcance") — no pueden
+ * iniciar, responder, adjuntar evidencia, sincronizar ni firmar una certificación. No aplica a
+ * `aceptar()` (011-aceptacion-apelaciones-certificacion), que es explícitamente una acción del
+ * cliente sobre una certificación ya firmada.
+ *
+ * @param rol - Nombre del rol del usuario autenticado.
+ * @returns `false` si el rol es de solo lectura para este flujo.
+ * @example
+ *   puedeEjecutarCertificacion("administrador")        // → true
+ *   puedeEjecutarCertificacion("usuario_sucursal")      // → false
+ */
+export function puedeEjecutarCertificacion(rol: string): boolean {
+  return rol !== "administrador_cliente" && rol !== "usuario_sucursal";
+}
+
+/**
+ * Formatea el período auditado a partir de `fechaInicioPeriodo`/`fechaFinPeriodo` (rango de
+ * fechas real, 2026-07-24). Cae a `periodoEtiqueta` (texto libre) solo para certificaciones
+ * creadas antes del cambio, que no tienen fechas.
+ *
+ * @example
+ *   formatearPeriodoCertificacion({ fechaInicioPeriodo: new Date("2026-07-01"), fechaFinPeriodo: new Date("2026-07-31"), periodoEtiqueta: null })
+ *   // → "01/07/2026 – 31/07/2026"
+ */
+export function formatearPeriodoCertificacion(certificacion: {
+  fechaInicioPeriodo: Date | null;
+  fechaFinPeriodo: Date | null;
+  periodoEtiqueta: string | null;
+}): string | null {
+  if (certificacion.fechaInicioPeriodo && certificacion.fechaFinPeriodo) {
+    const desde = formatearFechaCalendario(certificacion.fechaInicioPeriodo);
+    const hasta = formatearFechaCalendario(certificacion.fechaFinPeriodo);
+    return `${desde} – ${hasta}`;
+  }
+  return certificacion.periodoEtiqueta;
 }
 
 export interface DetalleParaResumen {

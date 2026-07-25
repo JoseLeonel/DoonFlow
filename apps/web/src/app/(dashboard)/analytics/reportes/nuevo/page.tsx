@@ -6,13 +6,13 @@ import { Boton } from "@doonflow/ui";
 import { obtenerSesionActual } from "../../../../../lib/sesion.servicio";
 import { listarClientes } from "../../../mantenimientos/clientes/_servicios/cliente.servicio";
 import { listarSucursales } from "../../../mantenimientos/clientes/_servicios/sucursal.servicio";
-import { usarGenerarReporte } from "../_hooks/usar-generar-reporte";
+import { useGenerarReporte } from "../_hooks/use-generar-reporte";
 import { FormularioGenerarReporte } from "../_components/formulario-generar-reporte";
 import { VistaPreviaConsolidado } from "../_components/vista-previa-consolidado";
 import { VistaPreviaComparativo } from "../_components/vista-previa-comparativo";
 
 export default function PaginaNuevoReporte() {
-  const hook = usarGenerarReporte();
+  const hook = useGenerarReporte();
 
   const [clienteFijo, setClienteFijo] = useState<{ id: string; empresa: string } | null>(null);
   const [sinAcceso, setSinAcceso] = useState(false);

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { FirmarCertificacionUseCase } from "../application/casos-uso/firmar-certificacion.usecase";
 import {
   CertificacionConHallazgoCriticoError,
@@ -7,21 +7,23 @@ import {
   InspeccionNoEncontradaError,
   SincronizacionPendienteError,
 } from "../domain/inspeccion.errors";
-import type { CertificacionRepositoryPort } from "../domain/certificacion.repository.port";
+import type { CertificacionCompleta, CertificacionRepositoryPort } from "../domain/certificacion.repository.port";
 import type { GeneradorPdfCertificacionPort } from "../domain/generador-pdf-certificacion.port";
 import type { AlmacenamientoEvidenciasPort } from "../domain/almacenamiento-evidencias.port";
 import type { HallazgoRepositoryPort } from "../domain/hallazgo.repository.port";
+import type { GestionarHallazgosUseCase } from "../application/casos-uso/gestionar-hallazgos.usecase";
 import type { Certificacion } from "../domain/certificacion.entity";
 
-function certificacionCompleta(parcial: Partial<Certificacion> = {}) {
+function certificacionCompleta(parcial: Partial<Certificacion> = {}): CertificacionCompleta {
   return {
     id: "cert1", empresaId: "e1", plantillaId: "p1", plantillaVersion: 1, inspectorId: "insp1",
-    sucursalId: "s1", periodoEtiqueta: "Julio 2026", estado: "EN_PROGRESO" as const,
+    sucursalId: "s1", periodoEtiqueta: null, fechaInicioPeriodo: new Date("2026-07-01"), fechaFinPeriodo: new Date("2026-07-31"), estado: "EN_PROGRESO" as const,
     fechaInicio: new Date(), fechaFin: null, puntajeObtenido: 8, puntajeMaximo: 10,
     porcentajeCumplimiento: 80, clasificacion: "Aprobado", observaciones: null,
     capturaOffline: false, sincronizadoEn: null,
     firmadoPorId: null, firmadoEn: null, codigoVerificacion: null, pdfUrl: null,
     fechaVencimiento: null, resultadoFinal: null,
+    aceptadoPorClienteId: null, aceptadoEn: null,
     creadoEn: new Date(), actualizadoEn: new Date(),
     plantilla: { id: "p1", nombre: "Ficha BPM", puntajeMaximo: 10, nodos: [], rangosResultado: [] },
     detalles: [], evidencias: [],
@@ -29,24 +31,25 @@ function certificacionCompleta(parcial: Partial<Certificacion> = {}) {
   };
 }
 
-function crearRepoMock(): CertificacionRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<CertificacionRepositoryPort> {
   return {
-    obtenerCompleta: vi.fn(),
-    firmar: vi.fn(),
-    establecerPdfUrl: vi.fn(),
-  } as unknown as CertificacionRepositoryPort & Record<string, Mock>;
+    iniciar: vi.fn(), obtenerCompleta: vi.fn(), listar: vi.fn(), guardarRespuestasSeccion: vi.fn(),
+    guardarEvidencia: vi.fn(), obtenerSucursalParaAlcance: vi.fn(), upsertDetallesConResolucionConflicto: vi.fn(),
+    marcarSincronizado: vi.fn(), firmar: vi.fn(), establecerPdfUrl: vi.fn(), aceptar: vi.fn(), actualizarResultadoFinal: vi.fn(), actualizarResumenProgreso: vi.fn(),
+    buscarPeriodoVigente: vi.fn(), finalizar: vi.fn(),
+  };
 }
 
 describe("FirmarCertificacionUseCase", () => {
   let repo: ReturnType<typeof crearRepoMock>;
-  let generadorPdf: GeneradorPdfCertificacionPort & Record<string, Mock>;
-  let almacenamientoPdf: AlmacenamientoEvidenciasPort & Record<string, Mock>;
+  let generadorPdf: Mocked<GeneradorPdfCertificacionPort>;
+  let almacenamientoPdf: Mocked<AlmacenamientoEvidenciasPort>;
   let uc: FirmarCertificacionUseCase;
 
   beforeEach(() => {
     repo = crearRepoMock();
-    generadorPdf = { generar: vi.fn().mockResolvedValue(Buffer.from("pdf")) } as unknown as GeneradorPdfCertificacionPort & Record<string, Mock>;
-    almacenamientoPdf = { subirArchivo: vi.fn().mockResolvedValue("http://localhost:4000/archivos/certificaciones-pdf/e1/cert1/certificado.pdf") } as unknown as AlmacenamientoEvidenciasPort & Record<string, Mock>;
+    generadorPdf = { generar: vi.fn().mockResolvedValue(Buffer.from("pdf")) };
+    almacenamientoPdf = { subirArchivo: vi.fn().mockResolvedValue("http://localhost:4000/archivos/certificaciones-pdf/e1/cert1/certificado.pdf") };
     uc = new FirmarCertificacionUseCase(repo, generadorPdf, almacenamientoPdf);
   });
 
@@ -122,8 +125,8 @@ describe("FirmarCertificacionUseCase", () => {
 
   it("con hallazgos MAYOR/MENOR únicamente retorna resultadoFinal APROBADA_CON_OBSERVACIONES e incluye los hallazgos en el PDF", async () => {
     const hallazgoRepo = {
-      listarPorInspeccion: vi.fn().mockResolvedValue([{ descripcion: "Falta señalización", severidad: "MAYOR" }]),
-    } as unknown as HallazgoRepositoryPort & Record<string, Mock>;
+      listarPorInspeccion: vi.fn().mockResolvedValue([{ descripcion: "Falta señalización", categoria: "NO_CONFORMIDAD", severidad: "MAYOR" }]),
+    } as unknown as Mocked<HallazgoRepositoryPort>;
     uc = new FirmarCertificacionUseCase(repo, generadorPdf, almacenamientoPdf, hallazgoRepo);
 
     repo.obtenerCompleta.mockResolvedValue(certificacionCompleta());
@@ -139,7 +142,40 @@ describe("FirmarCertificacionUseCase", () => {
 
     expect(resultado.resultadoFinal).toBe("APROBADA_CON_OBSERVACIONES");
     expect(generadorPdf.generar).toHaveBeenCalledWith(
-      expect.objectContaining({ hallazgos: [{ descripcion: "Falta señalización", severidad: "MAYOR" }] }),
+      expect.objectContaining({ hallazgos: [{ descripcion: "Falta señalización", categoria: "NO_CONFORMIDAD", severidad: "MAYOR" }] }),
     );
+  });
+
+  it("cuando se inyecta gestionarHallazgos, genera los hallazgos automáticos antes de firmar (T-172/hallazgo 6, 2026-07-24)", async () => {
+    const gestionarHallazgos = {
+      generarAutomaticos: vi.fn().mockResolvedValue([]),
+      sincronizarComentariosCategorizados: vi.fn().mockResolvedValue([]),
+    } as unknown as Mocked<GestionarHallazgosUseCase>;
+    uc = new FirmarCertificacionUseCase(repo, generadorPdf, almacenamientoPdf, undefined, gestionarHallazgos);
+
+    repo.obtenerCompleta.mockResolvedValue(certificacionCompleta());
+    repo.firmar.mockResolvedValue(certificacionCompleta({
+      estado: "FIRMADA", codigoVerificacion: "ABC1234567", firmadoEn: new Date(),
+      fechaVencimiento: new Date(), resultadoFinal: "APROBADA",
+    }));
+    repo.establecerPdfUrl.mockResolvedValue(certificacionCompleta({ estado: "FIRMADA", pdfUrl: "http://x/certificado.pdf" }));
+
+    await uc.ejecutar("cert1", "e1", "u1", { pendientesSincronizacion: 0 });
+
+    expect(gestionarHallazgos.generarAutomaticos).toHaveBeenCalledWith("cert1", "e1", undefined);
+    expect(gestionarHallazgos.sincronizarComentariosCategorizados).toHaveBeenCalledWith("cert1", "e1", undefined);
+  });
+
+  it("sin gestionarHallazgos inyectado, sigue firmando normalmente (compatibilidad hacia atrás)", async () => {
+    repo.obtenerCompleta.mockResolvedValue(certificacionCompleta());
+    repo.firmar.mockResolvedValue(certificacionCompleta({
+      estado: "FIRMADA", codigoVerificacion: "ABC1234567", firmadoEn: new Date(),
+      fechaVencimiento: new Date(), resultadoFinal: "APROBADA",
+    }));
+    repo.establecerPdfUrl.mockResolvedValue(certificacionCompleta({ estado: "FIRMADA", pdfUrl: "http://x/certificado.pdf" }));
+
+    const resultado = await uc.ejecutar("cert1", "e1", "u1", { pendientesSincronizacion: 0 });
+
+    expect(resultado.pdfUrl).toBe("http://x/certificado.pdf");
   });
 });

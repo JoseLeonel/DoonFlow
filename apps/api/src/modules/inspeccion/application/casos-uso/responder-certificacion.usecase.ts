@@ -50,7 +50,9 @@ export class ResponderCertificacionUseCase {
           tipoRespuesta: info.nodo.tipoRespuesta ?? "TEXTO_LIBRE",
           valor: r.valor ?? null,
           valores: r.valores ?? [],
-          comentario: r.comentario ?? null,
+          comentarioReconocimiento: r.comentarioReconocimiento ?? null,
+          comentarioObservacion: r.comentarioObservacion ?? null,
+          comentarioOportunidadMejora: r.comentarioOportunidadMejora ?? null,
           puntajeObtenido: calcularPuntajeRespuesta(info.nodo, r.valor ?? undefined, r.valores),
           puntajeMaximo: info.nodo.puntajeMaximo,
         };

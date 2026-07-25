@@ -21,6 +21,11 @@ export function PanelVerificacionAccion({ accion, onVerificar }: PropsPanelVerif
       setError("El comentario de verificación es requerido.");
       return;
     }
+    if (resultado === "NO_CUMPLIDO" && !nuevaFechaLimite) {
+      setResultadoPendiente(resultado);
+      setError("Debe indicar la nueva fecha límite.");
+      return;
+    }
     setEnviando(true);
     setError(null);
     try {
@@ -46,8 +51,9 @@ export function PanelVerificacionAccion({ accion, onVerificar }: PropsPanelVerif
         ))}
       </ul>
 
-      <label className="mb-1.5 block text-body-sm font-medium text-dark dark:text-white">Comentario de verificación *</label>
+      <label htmlFor="comentario-verificacion" className="mb-1.5 block text-body-sm font-medium text-dark dark:text-white">Comentario de verificación *</label>
       <textarea
+        id="comentario-verificacion"
         value={comentario}
         onChange={(e) => setComentario(e.target.value)}
         className="mb-3 w-full rounded-lg border border-stroke bg-transparent px-4 py-2 text-sm text-dark outline-none focus:border-primary dark:border-dark-3 dark:text-white"
@@ -56,8 +62,9 @@ export function PanelVerificacionAccion({ accion, onVerificar }: PropsPanelVerif
 
       {resultadoPendiente === "NO_CUMPLIDO" && (
         <div className="mb-3">
-          <label className="mb-1.5 block text-body-sm font-medium text-dark dark:text-white">Nueva fecha límite</label>
+          <label htmlFor="nueva-fecha-limite" className="mb-1.5 block text-body-sm font-medium text-dark dark:text-white">Nueva fecha límite</label>
           <input
+            id="nueva-fecha-limite"
             type="date"
             value={nuevaFechaLimite}
             onChange={(e) => setNuevaFechaLimite(e.target.value)}

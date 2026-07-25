@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 const COOKIE_TOKEN = "doonflow_token";
-const RUTAS_PUBLICAS = ["/auth/login", "/auth/registro", "/api/auth"];
+const RUTAS_PUBLICAS = ["/auth/login", "/auth/registro", "/api/auth", "/verificar", "/api/verificacion"];
 
 /**
  * Decodifica el payload del JWT sin verificar la firma — solo para UX de enrutamiento.
@@ -22,10 +22,17 @@ function decodificarPayload(token: string): { rol?: string; exp?: number } | nul
 
 const GUARDS_POR_RUTA: { prefijo: string; rolesPermitidos: string[] }[] = [
   { prefijo: "/mantenimientos/usuarios", rolesPermitidos: ["administrador"] },
+  // 009-integraciones-datos-masivos, HU-3 — solo administrador gestiona API keys (mismo criterio que el backend, ver api-keys.router.ts).
+  { prefijo: "/configuracion/integraciones", rolesPermitidos: ["administrador"] },
   { prefijo: "/mi-empresa", rolesPermitidos: ["administrador_cliente"] },
   { prefijo: "/mi-sucursal", rolesPermitidos: ["usuario_sucursal"] },
   // 013-hallazgos-plan-cumplimiento — regla 4: solo auditor/administrador verifican acciones.
   { prefijo: "/certificaciones/verificacion", rolesPermitidos: ["administrador", "auditor"] },
+  // 011-aceptacion-apelaciones-certificacion — resolver apelaciones requiere el permiso
+  // granular `apelaciones.resolver` (ver matriz de /mantenimientos/roles); como guard de UX
+  // aquí se restringe a los roles que típicamente lo tienen (administrador ya pasa siempre,
+  // auditor es a quien se le asigna por defecto) — la verificación real ocurre en el backend.
+  { prefijo: "/apelaciones", rolesPermitidos: ["administrador", "auditor"] },
 ];
 
 /** Guard de rutas: sin cookie de sesión, redirige a /auth/login. Dueño: agente-auth. */

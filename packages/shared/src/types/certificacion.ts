@@ -4,7 +4,7 @@ import type { NodoArbol, RangoResultado } from "./inspeccion";
  * Certificación (ampliación de `Inspeccion`) — incluye los campos de firma de
  * [[005-certificacion-plan-cumplimiento]] (retomado 2026-07-21).
  */
-export type EstadoCertificacion = "EN_PROGRESO" | "FIRMADA";
+export type EstadoCertificacion = "EN_PROGRESO" | "FINALIZADA" | "FIRMADA";
 
 export interface Certificacion {
   id: string;
@@ -13,7 +13,10 @@ export interface Certificacion {
   plantillaVersion: number;
   inspectorId: string;
   sucursalId: string | null;
+  /** @deprecated reemplazado por `fechaInicioPeriodo`/`fechaFinPeriodo` (2026-07-24) — solo lectura, para certificaciones creadas antes del cambio. */
   periodoEtiqueta: string | null;
+  fechaInicioPeriodo: string | null;
+  fechaFinPeriodo: string | null;
   estado: EstadoCertificacion;
   fechaInicio: string;
   fechaFin: string | null;
@@ -35,6 +38,9 @@ export interface Certificacion {
   fechaVencimiento: string | null;
   /** 005-certificacion-plan-cumplimiento — fijo en `APROBADA` hasta que 013 calcule el valor real por severidad. */
   resultadoFinal: string | null;
+  /** 011-aceptacion-apelaciones-certificacion — reconocimiento informativo del cliente, no bloquea el certificado. */
+  aceptadoPorClienteId: string | null;
+  aceptadoEn: string | null;
   creadoEn: string;
   actualizadoEn: string;
 }
@@ -44,7 +50,10 @@ export interface DetalleCertificacion {
   nodoId: string;
   valor: string | null;
   valores: string[];
-  comentario: string | null;
+  /** Siempre visibles en el wizard (ambas respuestas Sí/No) — reemplaza al comentario único condicional anterior. */
+  comentarioReconocimiento: string | null;
+  comentarioObservacion: string | null;
+  comentarioOportunidadMejora: string | null;
   puntajeObtenido: number;
   puntajeMaximo: number;
 }
@@ -90,6 +99,14 @@ export type Severidad = "CRITICA" | "MAYOR" | "MENOR";
 export type EstadoPlan = "EN_SEGUIMIENTO" | "CERRADO" | "REABIERTO";
 export type EstadoAccion = "PENDIENTE" | "EN_PROCESO" | "EN_REVISION" | "CUMPLIDO" | "NO_CUMPLIDO" | "VENCIDO";
 export type ResultadoFinal = "APROBADA" | "APROBADA_CON_OBSERVACIONES" | "RECHAZADA";
+/** 011-aceptacion-apelaciones-certificacion — separado de `severidad` para no romper el cálculo de `resultadoFinal`. */
+export type EstadoHallazgo = "ACTIVO" | "ANULADO_POR_APELACION";
+/**
+ * 2026-07-25 — clasificación del reporte de hallazgos pedida por el cliente. Solo NO_CONFORMIDAD
+ * lleva `severidad` y dispara plan de cumplimiento; las otras 3 se generan desde los comentarios
+ * de la pregunta y son puramente informativas.
+ */
+export type CategoriaHallazgo = "NO_CONFORMIDAD" | "RECONOCIMIENTO" | "OBSERVACION" | "OPORTUNIDAD_MEJORA";
 
 export interface HallazgoEvidencia {
   id: string;
@@ -105,7 +122,10 @@ export interface Hallazgo {
   inspeccionId: string;
   detalleId?: string | null;
   descripcion: string;
-  severidad: Severidad;
+  categoria: CategoriaHallazgo;
+  /** `null` para categorías distintas de NO_CONFORMIDAD. */
+  severidad: Severidad | null;
+  estado: EstadoHallazgo;
   creadoEn: string;
   evidencias: HallazgoEvidencia[];
 }

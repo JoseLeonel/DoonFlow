@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { usarPlanCumplimiento } from "../../_hooks/usar-plan-cumplimiento";
+import { usePlanCumplimiento } from "../../_hooks/use-plan-cumplimiento";
 import { IndicadoresPlan } from "../../_components/indicadores-plan";
 import { TablaPlanCumplimiento } from "../../_components/tabla-plan-cumplimiento";
 import { listarUsuarios, type UsuarioConAlcance } from "../../../mantenimientos/usuarios/_servicios/usuario.servicio";
@@ -11,7 +11,7 @@ import { listarUsuarios, type UsuarioConAlcance } from "../../../mantenimientos/
 export default function PaginaPlanCumplimiento() {
   const { id } = useParams<{ id: string }>();
   const { plan, hallazgos, cargando, error, procesando, puedeCerrarse, generar, crearAccionEnPlan, cerrar, reabrir } =
-    usarPlanCumplimiento(id);
+    usePlanCumplimiento(id);
   const [hallazgoSeleccionado, setHallazgoSeleccionado] = useState<string | null>(null);
   const [usuarios, setUsuarios] = useState<UsuarioConAlcance[]>([]);
   const [descripcion, setDescripcion] = useState("");

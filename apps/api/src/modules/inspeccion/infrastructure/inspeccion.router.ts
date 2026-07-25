@@ -5,6 +5,7 @@ import type { HallazgoController } from "./hallazgo.controller";
 import type { PlanCumplimientoController } from "./plan-cumplimiento.controller";
 import type { AccionCorrectivaController } from "./accion-correctiva.controller";
 import { subidaArchivoEvidencia } from "./subida-archivo.middleware";
+import { requiereRolEjecutorCertificacion } from "./rol-ejecutor-certificacion.middleware";
 import type { RequestHandler } from "express";
 
 export function crearInspeccionRouter(
@@ -48,27 +49,35 @@ export function crearInspeccionRouter(
   r.delete("/plantillas/:id/nodos/:nodoId",     ctrl.eliminarNodo);
 
   // Certificaciones (015-wizard-certificacion) — requieren alcance (Total/Cliente/Sucursal)
-  r.post  ("/certificaciones",                    resolverAlcance, ctrlCertificacion.iniciar);
+  // Escritura bloqueada para administrador_cliente/usuario_sucursal (T-172, solo lectura).
+  r.post  ("/certificaciones",                    resolverAlcance, requiereRolEjecutorCertificacion, ctrlCertificacion.iniciar);
   r.get   ("/certificaciones",                    resolverAlcance, ctrlCertificacion.listar);
   r.get   ("/certificaciones/:id",                resolverAlcance, ctrlCertificacion.obtenerCompleta);
-  r.patch ("/certificaciones/:id/respuestas",     resolverAlcance, ctrlCertificacion.guardarRespuestasSeccion);
-  r.post  ("/certificaciones/:id/evidencias",     resolverAlcance, subidaArchivoEvidencia, ctrlCertificacion.adjuntarEvidencia);
+  r.patch ("/certificaciones/:id/respuestas",     resolverAlcance, requiereRolEjecutorCertificacion, ctrlCertificacion.guardarRespuestasSeccion);
+  r.post  ("/certificaciones/:id/evidencias",     resolverAlcance, requiereRolEjecutorCertificacion, subidaArchivoEvidencia, ctrlCertificacion.adjuntarEvidencia);
   r.get   ("/certificaciones/:id/resumen",        resolverAlcance, ctrlCertificacion.obtenerResumen);
 
   // Captura offline (012-captura-offline-campo)
-  r.post  ("/certificaciones/:id/sincronizacion",             resolverAlcance, ctrlCertificacion.sincronizarLote);
-  r.post  ("/certificaciones/:id/sincronizacion/evidencias",  resolverAlcance, subidaArchivoEvidencia, ctrlCertificacion.sincronizarEvidencia);
+  r.post  ("/certificaciones/:id/sincronizacion",             resolverAlcance, requiereRolEjecutorCertificacion, ctrlCertificacion.sincronizarLote);
+  r.post  ("/certificaciones/:id/sincronizacion/evidencias",  resolverAlcance, requiereRolEjecutorCertificacion, subidaArchivoEvidencia, ctrlCertificacion.sincronizarEvidencia);
   r.get   ("/certificaciones/:id/sincronizacion/estado",      resolverAlcance, ctrlCertificacion.obtenerEstadoSincronizacion);
 
   // Firma (005-certificacion-plan-cumplimiento, retomado)
-  r.post  ("/certificaciones/:id/firmar",  resolverAlcance, ctrlCertificacion.firmar);
+  r.post  ("/certificaciones/:id/firmar",  resolverAlcance, requiereRolEjecutorCertificacion, ctrlCertificacion.firmar);
   r.get   ("/certificaciones/:id/pdf",     resolverAlcance, ctrlCertificacion.obtenerPdf);
+
+  // Finalización liviana, sin firma/PDF (2026-07-24)
+  r.post  ("/certificaciones/:id/finalizar", resolverAlcance, requiereRolEjecutorCertificacion, ctrlCertificacion.finalizar);
+
+  // Aceptación del cliente (011-aceptacion-apelaciones-certificacion)
+  r.post  ("/certificaciones/:id/aceptar", resolverAlcance, ctrlCertificacion.aceptar);
 
   // Hallazgos y plan de cumplimiento (013-hallazgos-plan-cumplimiento)
   r.get   ("/certificaciones/:id/evidencias",                  resolverAlcance, ctrlAccionCorrectiva.evidenciasConsolidadas);
   r.get   ("/certificaciones/:id/hallazgos",                   resolverAlcance, ctrlHallazgo.listar);
   r.post  ("/certificaciones/:id/hallazgos",                   resolverAlcance, ctrlHallazgo.crear);
   r.post  ("/certificaciones/:id/hallazgos/generar-automaticos", resolverAlcance, ctrlHallazgo.generarAutomaticos);
+  r.post  ("/certificaciones/:id/hallazgos/generar-comentarios", resolverAlcance, ctrlHallazgo.generarDesdeComentarios);
   r.patch ("/hallazgos/:id",              ctrlHallazgo.actualizar);
   r.post  ("/hallazgos/:id/evidencias",   subidaArchivoEvidencia, ctrlHallazgo.adjuntarEvidencia);
 

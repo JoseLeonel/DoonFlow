@@ -1,29 +1,28 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { IniciarCertificacionUseCase } from "../application/casos-uso/iniciar-certificacion.usecase";
-import { PlantillaInactivaError, SucursalFueraDeAlcanceError, SucursalRequeridaError } from "../domain/inspeccion.errors";
+import { PeriodoCertificacionVigenteError, PlantillaInactivaError, SucursalFueraDeAlcanceError, SucursalRequeridaError } from "../domain/inspeccion.errors";
 import type { CertificacionRepositoryPort } from "../domain/certificacion.repository.port";
 import type { PlantillaRepositoryPort } from "../domain/plantilla.repository.port";
 import type { PlantillaCompleta } from "../domain/plantilla.entity";
 
-function crearCertificacionRepoMock(): CertificacionRepositoryPort & Record<string, Mock> {
+function crearCertificacionRepoMock(): Mocked<CertificacionRepositoryPort> {
   return {
-    iniciar: vi.fn(),
-    obtenerCompleta: vi.fn(),
-    listar: vi.fn(),
-    guardarRespuestasSeccion: vi.fn(),
-    guardarEvidencia: vi.fn(),
-    obtenerSucursalParaAlcance: vi.fn(),
-  } as unknown as CertificacionRepositoryPort & Record<string, Mock>;
+    iniciar: vi.fn(), obtenerCompleta: vi.fn(), listar: vi.fn(), guardarRespuestasSeccion: vi.fn(),
+    guardarEvidencia: vi.fn(), obtenerSucursalParaAlcance: vi.fn(), upsertDetallesConResolucionConflicto: vi.fn(),
+    marcarSincronizado: vi.fn(), firmar: vi.fn(), establecerPdfUrl: vi.fn(), aceptar: vi.fn(), actualizarResultadoFinal: vi.fn(), actualizarResumenProgreso: vi.fn(),
+    buscarPeriodoVigente: vi.fn(), finalizar: vi.fn(),
+  };
 }
 
-function crearPlantillaRepoMock(): PlantillaRepositoryPort & Record<string, Mock> {
+function crearPlantillaRepoMock(): Mocked<PlantillaRepositoryPort> {
   return {
     listar: vi.fn(), obtenerCompleta: vi.fn(), crear: vi.fn(), actualizar: vi.fn(),
     cambiarEstado: vi.fn(), eliminar: vi.fn(), clonar: vi.fn(), crearNodo: vi.fn(),
     actualizarNodo: vi.fn(), contarHijosNodo: vi.fn(), eliminarNodo: vi.fn(),
-    reordenarNodos: vi.fn(), guardarRangos: vi.fn(),
-  } as unknown as PlantillaRepositoryPort & Record<string, Mock>;
+    reordenarNodos: vi.fn(), guardarRangos: vi.fn(), cambiarEstadoAprobacion: vi.fn(),
+    listarPendientesAprobacion: vi.fn(),
+  };
 }
 
 function plantillaActiva(parcial: Partial<PlantillaCompleta> = {}): PlantillaCompleta {
@@ -46,7 +45,7 @@ describe("IniciarCertificacionUseCase", () => {
     uc = new IniciarCertificacionUseCase(certificacionRepo, plantillaRepo);
   });
 
-  const input = { plantillaId: "p1", sucursalId: "s1", periodoEtiqueta: "Julio 2026" };
+  const input = { plantillaId: "p1", sucursalId: "s1", fechaInicioPeriodo: new Date("2026-07-01"), fechaFinPeriodo: new Date("2026-07-31") };
 
   it("lanza PlantillaInactivaError si la plantilla vigente no está activa", async () => {
     plantillaRepo.obtenerCompleta.mockResolvedValue(plantillaActiva({ activa: false }));
@@ -64,7 +63,7 @@ describe("IniciarCertificacionUseCase", () => {
 
   it("lanza SucursalFueraDeAlcanceError si la sucursal no pertenece al cliente del alcance del usuario", async () => {
     plantillaRepo.obtenerCompleta.mockResolvedValue(plantillaActiva());
-    certificacionRepo.obtenerSucursalParaAlcance.mockResolvedValue({ id: "s1", clienteId: "clienteX", activo: true });
+    certificacionRepo.obtenerSucursalParaAlcance.mockResolvedValue({ id: "s1", nombre: "Sucursal X", clienteId: "clienteX", activo: true });
 
     await expect(
       uc.ejecutar("e1", "insp1", input, { tipo: "CLIENTE", clienteId: "clienteY" }),
@@ -73,8 +72,9 @@ describe("IniciarCertificacionUseCase", () => {
 
   it("crea la certificación con la plantillaVersion congelada cuando todo es válido", async () => {
     plantillaRepo.obtenerCompleta.mockResolvedValue(plantillaActiva({ version: 5 }));
-    certificacionRepo.obtenerSucursalParaAlcance.mockResolvedValue({ id: "s1", clienteId: "clienteY", activo: true });
-    certificacionRepo.iniciar.mockResolvedValue({ id: "cert1" });
+    certificacionRepo.obtenerSucursalParaAlcance.mockResolvedValue({ id: "s1", nombre: "Sucursal Y", clienteId: "clienteY", activo: true });
+    certificacionRepo.buscarPeriodoVigente.mockResolvedValue(null);
+    certificacionRepo.iniciar.mockResolvedValue({ id: "cert1" } as any);
 
     const resultado = await uc.ejecutar("e1", "insp1", input, { tipo: "CLIENTE", clienteId: "clienteY" });
 
@@ -84,8 +84,42 @@ describe("IniciarCertificacionUseCase", () => {
       plantillaVersion: 5,
       inspectorId: "insp1",
       sucursalId: "s1",
-      periodoEtiqueta: "Julio 2026",
+      fechaInicioPeriodo: input.fechaInicioPeriodo,
+      fechaFinPeriodo: input.fechaFinPeriodo,
     });
     expect(resultado).toEqual({ id: "cert1" });
+  });
+
+  it("lanza PeriodoCertificacionVigenteError si ya hay una certificación vigente para esa sucursal+plantilla", async () => {
+    plantillaRepo.obtenerCompleta.mockResolvedValue(plantillaActiva());
+    certificacionRepo.obtenerSucursalParaAlcance.mockResolvedValue({ id: "s1", nombre: "Sucursal Y", clienteId: "clienteY", activo: true });
+    certificacionRepo.buscarPeriodoVigente.mockResolvedValue({ id: "cert-anterior", fechaFinPeriodo: new Date("2026-08-31") });
+
+    await expect(uc.ejecutar("e1", "insp1", input)).rejects.toThrow(PeriodoCertificacionVigenteError);
+    expect(certificacionRepo.iniciar).not.toHaveBeenCalled();
+  });
+
+  it("014-panel-calendario-biblioteca: con planId, llama marcarPlanEjecutado con el id de la certificación recién creada", async () => {
+    plantillaRepo.obtenerCompleta.mockResolvedValue(plantillaActiva());
+    certificacionRepo.obtenerSucursalParaAlcance.mockResolvedValue({ id: "s1", nombre: "Sucursal Y", clienteId: "clienteY", activo: true });
+    certificacionRepo.iniciar.mockResolvedValue({ id: "cert1" } as any);
+    const marcarPlanEjecutado = vi.fn();
+    const ucConPlan = new IniciarCertificacionUseCase(certificacionRepo, plantillaRepo, marcarPlanEjecutado);
+
+    await ucConPlan.ejecutar("e1", "insp1", { ...input, planId: "plan1" });
+
+    expect(marcarPlanEjecutado).toHaveBeenCalledWith("plan1", "e1", "cert1");
+  });
+
+  it("sin planId, no llama marcarPlanEjecutado", async () => {
+    plantillaRepo.obtenerCompleta.mockResolvedValue(plantillaActiva());
+    certificacionRepo.obtenerSucursalParaAlcance.mockResolvedValue({ id: "s1", nombre: "Sucursal Y", clienteId: "clienteY", activo: true });
+    certificacionRepo.iniciar.mockResolvedValue({ id: "cert1" } as any);
+    const marcarPlanEjecutado = vi.fn();
+    const ucConPlan = new IniciarCertificacionUseCase(certificacionRepo, plantillaRepo, marcarPlanEjecutado);
+
+    await ucConPlan.ejecutar("e1", "insp1", input);
+
+    expect(marcarPlanEjecutado).not.toHaveBeenCalled();
   });
 });

@@ -21,6 +21,10 @@ model Empresa {
 
   usuarios  Usuario[]
   clientes  Cliente[]
+  /// 006-vigencia-notificaciones-portal
+  notificaciones Notificacion[]
+  /// 009-integraciones-datos-masivos, HU-3
+  apiKeys   ApiKey[]
 
   @@map("empresa")
 }
@@ -93,11 +97,20 @@ model Usuario {
   avisosPrivacidadRegistrados AvisoPrivacidad[]
   reportesGenerados     ReporteGenerado[]
   importacionesCreadas  ImportacionLote[]
+  apiKeysCreadas        ApiKey[]
   certificacionesFirmadas Inspeccion[] @relation("InspeccionFirmadoPor")
   /// 013-hallazgos-plan-cumplimiento
   accionesResponsable   AccionCorrectiva[] @relation("AccionesResponsable")
   accionesVerificadas   AccionCorrectiva[] @relation("AccionesVerificadas")
   planesCerrados        PlanCumplimiento[] @relation("PlanesCerrados")
+  /// 011-aceptacion-apelaciones-certificacion
+  certificacionesAceptadas Inspeccion[] @relation("InspeccionAceptadaPorCliente")
+  apelacionesSolicitadas   Apelacion[]  @relation("ApelacionesSolicitadas")
+  apelacionesResueltas     Apelacion[]  @relation("ApelacionesResueltas")
+  /// 006-vigencia-notificaciones-portal
+  notificaciones           Notificacion[]
+  /// 014-panel-calendario-biblioteca
+  planesAuditoriaSugeridos PlanAuditoria[] @relation("PlanAuditoriaResponsableSugerido")
 
   @@index([empresaId])
   @@index([sucursalId])
@@ -158,6 +171,8 @@ model Sucursal {
   usuarios Usuario[] @relation("SucursalPrincipal")
   accesos  UsuarioSucursalAcceso[]
   inspecciones Inspeccion[]
+  /// 014-panel-calendario-biblioteca
+  planesAuditoria PlanAuditoria[]
 
   @@index([empresaId, clienteId, activo])
   @@map("sucursal")
@@ -212,14 +227,6 @@ enum ModalidadPuntaje {
   PARCIAL
   MANUAL
   POR_OPCIONES
-}
-
-enum ReglaComentario {
-  NUNCA
-  SIEMPRE
-  CUANDO_NEGATIVO
-  CUANDO_PUNTAJE_MENOR_MAXIMO
-  CONFIGURABLE
 }
 
 /// RF-01 — Plantilla de inspección
@@ -292,8 +299,6 @@ model InspeccionNodo {
   tipoRespuesta    TipoRespuesta?    @map("tipo_respuesta")
   modalidadPuntaje ModalidadPuntaje? @map("modalidad_puntaje")
   puntajeMaximo    Decimal           @default(0) @map("puntaje_maximo") @db.Decimal(8, 2)
-  reglaComentario  ReglaComentario   @default(NUNCA) @map("regla_comentario")
-  umbralComentario Decimal?          @map("umbral_comentario") @db.Decimal(8, 2)
   evidenciaObligatoria Boolean       @default(false) @map("evidencia_obligatoria")
   evidenciaMinima  Int               @default(0) @map("evidencia_minima")
   evidenciaMaxima  Int               @default(5) @map("evidencia_maxima")
@@ -358,7 +363,13 @@ model Inspeccion {
   sucursalId             String?   @map("sucursal_id")
   /// @deprecated reemplazado por `sucursalId` (sprint 015-wizard-certificacion) — se conserva por historial, no se elimina.
   establecimiento        String?
+  /// @deprecated reemplazado por `fechaInicioPeriodo`/`fechaFinPeriodo` (2026-07-24) — se conserva por historial de certificaciones creadas antes del cambio, no se elimina.
   periodoEtiqueta        String?   @map("periodo_etiqueta") @db.VarChar(50)
+  /// Rango de vigencia del período auditado (no confundir con `fechaInicio`/`fechaFin`, que son la
+  /// captura de ESTA certificación). Mientras `fechaFinPeriodo` no haya pasado, no se puede iniciar
+  /// otra certificación para la misma sucursal+plantilla (ver `IniciarCertificacionUseCase`).
+  fechaInicioPeriodo     DateTime? @map("fecha_inicio_periodo") @db.Date
+  fechaFinPeriodo        DateTime? @map("fecha_fin_periodo") @db.Date
   fechaInicio            DateTime  @map("fecha_inicio")
   fechaFin               DateTime? @map("fecha_fin")
   estado                 String    @default("EN_PROGRESO")
@@ -380,15 +391,24 @@ model Inspeccion {
   fechaVencimiento DateTime? @map("fecha_vencimiento") @db.Date
   resultadoFinal  String?   @map("resultado_final") @db.VarChar(30)
 
+  /// 011-aceptacion-apelaciones-certificacion — reconocimiento informativo del cliente, no bloquea el certificado.
+  aceptadoPorClienteId String?   @map("aceptado_por_cliente_id")
+  aceptadoEn           DateTime? @map("aceptado_en")
+
   plantilla      InspeccionPlantilla    @relation(fields: [plantillaId], references: [id])
   sucursal       Sucursal?                @relation(fields: [sucursalId], references: [id])
   firmadoPor     Usuario?                 @relation("InspeccionFirmadoPor", fields: [firmadoPorId], references: [id])
+  aceptadoPorCliente Usuario?             @relation("InspeccionAceptadaPorCliente", fields: [aceptadoPorClienteId], references: [id])
   detalles       InspeccionDetalle[]
   evidencias     InspeccionEvidencia[]
   reinspecciones InspeccionReinspeccion[]
   /// 013-hallazgos-plan-cumplimiento
   hallazgos        Hallazgo[]
   planCumplimiento PlanCumplimiento?
+  /// 011-aceptacion-apelaciones-certificacion
+  apelaciones      Apelacion[]
+  /// 014-panel-calendario-biblioteca — inverso de PlanAuditoria.inspeccionId (FK única).
+  planAuditoria    PlanAuditoria?
 
   @@index([empresaId, estado])
   @@index([plantillaId])
@@ -396,6 +416,7 @@ model Inspeccion {
   @@index([empresaId, sucursalId, estado, creadoEn])
   @@index([sucursalId, fechaInicio])
   @@index([empresaId, capturaOffline])
+  @@index([sucursalId, plantillaId, fechaFinPeriodo])
   @@map("inspeccion")
 }
 
@@ -416,7 +437,12 @@ model InspeccionDetalle {
   respuestasMultiples String[] @map("respuestas_multiples")
   puntajeObtenido     Decimal  @default(0) @map("puntaje_obtenido") @db.Decimal(8, 2)
   puntajeMaximo       Decimal  @default(0) @map("puntaje_maximo") @db.Decimal(8, 2)
-  comentario          String?
+  /// Los 3 comentarios se muestran siempre en el wizard (ambas respuestas Sí/No) — pedido explícito
+  /// del cliente (revisión de audios WhatsApp 2026-06-03), a diferencia del comentario único
+  /// condicional anterior (regla_comentario, eliminado). Límite de 1500 caracteres validado en Zod.
+  comentarioReconocimiento    String? @map("comentario_reconocimiento")
+  comentarioObservacion       String? @map("comentario_observacion")
+  comentarioOportunidadMejora String? @map("comentario_oportunidad_mejora")
   creadoEn            DateTime @default(now()) @map("creado_en")
   actualizadoEn       DateTime @updatedAt @map("actualizado_en")
 
@@ -473,21 +499,32 @@ model InspeccionReinspeccion {
 /// Incumplimiento detectado en una certificación — automático (desde una respuesta con
 /// puntaje incompleto) o manual (agregado por el auditor durante la revisión).
 model Hallazgo {
-  id           String   @id @default(uuid())
-  inspeccionId String   @map("inspeccion_id")
-  detalleId    String?  @map("detalle_id")
+  id           String         @id @default(uuid())
+  inspeccionId String         @map("inspeccion_id")
+  detalleId    String?        @map("detalle_id")
   descripcion  String
-  severidad    String   @db.VarChar(20) // CRITICA | MAYOR | MENOR
-  empresaId    String   @map("empresa_id")
-  creadoEn     DateTime @default(now()) @map("creado_en")
+  /// `null` para categoria RECONOCIMIENTO/OBSERVACION/OPORTUNIDAD_MEJORA — solo aplica a NO_CONFORMIDAD.
+  severidad    String?        @db.VarChar(20) // CRITICA | MAYOR | MENOR
+  /// 2026-07-25 — clasificación pedida por el cliente para el reporte de hallazgos. Los hallazgos
+  /// automáticos/manuales de incumplimiento siguen siendo NO_CONFORMIDAD (con severidad, disparan
+  /// plan de cumplimiento); las otras 3 categorías se generan desde los comentarios de la pregunta,
+  /// son solo informativas y nunca disparan plan de cumplimiento ni apelaciones.
+  categoria    String         @default("NO_CONFORMIDAD") @db.VarChar(20)
+  /// 011-aceptacion-apelaciones-certificacion — separado de `severidad` para no romper el cálculo de resultadoFinal existente.
+  /// VARCHAR, no enum de Postgres — mismo criterio que `severidad` y que `plan_cumplimiento.estado`/`accion_correctiva.estado`.
+  estado       String         @default("ACTIVO") @db.VarChar(30) // ACTIVO | ANULADO_POR_APELACION
+  empresaId    String         @map("empresa_id")
+  creadoEn     DateTime       @default(now()) @map("creado_en")
 
   inspeccion Inspeccion          @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
   detalle    InspeccionDetalle?  @relation(fields: [detalleId], references: [id])
   evidencias HallazgoEvidencia[]
   acciones   AccionCorrectiva[]
+  apelaciones Apelacion[]
 
   @@index([inspeccionId])
   @@index([empresaId, severidad])
+  @@index([inspeccionId, categoria])
   @@map("hallazgo")
 }
 
@@ -566,6 +603,37 @@ model AccionCorrectivaEvidencia {
 
   @@index([accionCorrectivaId])
   @@map("accion_correctiva_evidencia")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 011-aceptacion-apelaciones-certificacion — Aceptación del cliente y apelaciones
+// sobre un hallazgo puntual o sobre el resultado final de una certificación firmada.
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// `tipo`/`estado` son VARCHAR, no enum de Postgres — mismo criterio que `hallazgo.estado`/`plan_cumplimiento.estado`.
+model Apelacion {
+  id                   String    @id @default(uuid())
+  empresaId            String    @map("empresa_id")
+  inspeccionId         String    @map("inspeccion_id")
+  hallazgoId           String?   @map("hallazgo_id")
+  tipo                 String    @db.VarChar(20) // SOBRE_HALLAZGO | SOBRE_RESULTADO
+  motivo               String
+  solicitadoPorId      String    @map("solicitado_por_id")
+  solicitadoEn         DateTime  @default(now()) @map("solicitado_en")
+  estado               String    @default("ABIERTA") @db.VarChar(20) // ABIERTA | EN_REVISION | ACEPTADA | RECHAZADA
+  resueltoPorId        String?   @map("resuelto_por_id")
+  resueltoEn           DateTime? @map("resuelto_en")
+  resolucionComentario String?   @map("resolucion_comentario")
+
+  inspeccion    Inspeccion @relation(fields: [inspeccionId], references: [id], onDelete: Cascade)
+  hallazgo      Hallazgo?  @relation(fields: [hallazgoId], references: [id])
+  solicitadoPor Usuario    @relation("ApelacionesSolicitadas", fields: [solicitadoPorId], references: [id])
+  resueltoPor   Usuario?   @relation("ApelacionesResueltas", fields: [resueltoPorId], references: [id])
+
+  @@index([empresaId, estado])
+  @@index([inspeccionId])
+  @@index([hallazgoId])
+  @@map("apelacion")
 }
 
 /// RF-12 — Auditoría de cambios en configuración
@@ -661,6 +729,27 @@ model ImportacionLote {
   @@map("importacion_lote")
 }
 
+/// ApiKey — clave de integración programática de una empresa tenant, para consultar la API
+/// pública de verificación de certificaciones sin depender del portal humano (009, HU-3).
+/// `claveHash` guarda un hash SHA-256 de la clave real; el texto plano solo se muestra una vez,
+/// al crearla (regla de negocio 3 de la spec) — nunca se persiste en claro.
+model ApiKey {
+  id          String    @id @default(uuid())
+  empresaId   String    @map("empresa_id")
+  nombre      String
+  claveHash   String    @unique @map("clave_hash")
+  activa      Boolean   @default(true)
+  ultimoUsoEn DateTime? @map("ultimo_uso_en")
+  creadoPorId String    @map("creado_por_id")
+  creadoEn    DateTime  @default(now()) @map("creado_en")
+
+  empresa   Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+  creadoPor Usuario @relation(fields: [creadoPorId], references: [id])
+
+  @@index([empresaId, activa])
+  @@map("api_key")
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // MÓDULO: REPORTES Y ANALYTICS (008-reportes-analytics)
 // Reportes agregados (consolidado por cliente / comparativo entre sucursales),
@@ -711,4 +800,76 @@ model AvisoPrivacidad {
 
   @@index([entidadTipo, entidadId])
   @@map("aviso_privacidad")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 006-vigencia-notificaciones-portal — Notificaciones (vencimiento, escalamiento,
+// hallazgo crítico, acción asignada). El portal público de verificación no necesita
+// tabla nueva: lee campos ya públicos de `Inspeccion` (ver módulo `verificacion`).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// `tipo`/`referenciaTipo` son VARCHAR, no enum de Postgres — mismo criterio que el resto de
+/// campos de estado del proyecto desde 013 (ver lección documentada en 011).
+model Notificacion {
+  id               String    @id @default(uuid())
+  usuarioId        String    @map("usuario_id")
+  tipo             String    @db.VarChar(30) // ACCION_ASIGNADA | ACCION_POR_VENCER | ACCION_VENCIDA | ACCION_ESCALADA | CERTIFICACION_POR_VENCER | HALLAZGO_CRITICO
+  referenciaTipo   String    @map("referencia_tipo") @db.VarChar(20) // accion_correctiva | inspeccion | hallazgo
+  referenciaId     String    @map("referencia_id")
+  mensaje          String
+  leidaEn          DateTime? @map("leida_en")
+  enviadaPorCorreo Boolean   @default(false) @map("enviada_por_correo")
+  creadoEn         DateTime  @default(now()) @map("creado_en")
+  empresaId        String    @map("empresa_id")
+
+  usuario Usuario @relation(fields: [usuarioId], references: [id], onDelete: Cascade)
+  empresa Empresa @relation(fields: [empresaId], references: [id], onDelete: Cascade)
+
+  @@index([usuarioId, leidaEn])
+  @@index([empresaId, creadoEn])
+  @@index([referenciaTipo, referenciaId, tipo, creadoEn])
+  @@map("notificacion")
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 014-panel-calendario-biblioteca — Calendario de auditorías (planificación) y
+// biblioteca de hallazgos frecuentes. El panel ejecutivo (HU-4) no agrega tabla
+// nueva — lee agregados de `inspeccion`/`hallazgo`/`accion_correctiva` (módulo `reportes`).
+// ═══════════════════════════════════════════════════════════════════════════
+
+/// `estado` es VARCHAR, no enum de Postgres — mismo criterio que el resto de campos de estado
+/// del proyecto desde 013 (lección documentada en 011/006).
+model PlanAuditoria {
+  id                    String    @id @default(uuid())
+  sucursalId            String    @map("sucursal_id")
+  fechaObjetivo         DateTime  @map("fecha_objetivo") @db.Date
+  responsableSugeridoId String?   @map("responsable_sugerido_id")
+  estado                String    @default("PROGRAMADA") @db.VarChar(20) // PROGRAMADA | EJECUTADA | REPROGRAMADA
+  inspeccionId          String?   @unique @map("inspeccion_id")
+  creadoEn              DateTime  @default(now()) @map("creado_en")
+  empresaId             String    @map("empresa_id")
+
+  sucursal            Sucursal    @relation(fields: [sucursalId], references: [id])
+  responsableSugerido Usuario?    @relation("PlanAuditoriaResponsableSugerido", fields: [responsableSugeridoId], references: [id])
+  inspeccion          Inspeccion? @relation(fields: [inspeccionId], references: [id])
+
+  @@index([sucursalId, fechaObjetivo])
+  @@index([empresaId, estado])
+  @@map("plan_auditoria")
+}
+
+/// Catálogo de conveniencia — nunca se referencia por FK desde `Hallazgo` (se copia el texto al
+/// usarla, regla 3 de la spec), para que un hallazgo histórico no cambie si se edita/desactiva.
+model HallazgoFrecuente {
+  id                        String   @id @default(uuid())
+  descripcionHallazgo       String   @map("descripcion_hallazgo") @db.VarChar(300)
+  severidadSugerida         String   @map("severidad_sugerida") @db.VarChar(10) // CRITICA | MAYOR | MENOR
+  descripcionAccionSugerida String?  @map("descripcion_accion_sugerida")
+  activo                    Boolean  @default(true)
+  empresaId                 String   @map("empresa_id")
+  creadoEn                  DateTime @default(now()) @map("creado_en")
+  actualizadoEn             DateTime @updatedAt @map("actualizado_en")
+
+  @@index([empresaId, activo])
+  @@map("hallazgo_frecuente")
 }

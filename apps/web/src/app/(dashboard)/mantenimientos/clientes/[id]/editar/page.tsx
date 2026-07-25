@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@doonflow/shared";
 import { FormularioCliente } from "../../_components/formulario-cliente";
@@ -9,7 +9,8 @@ import { SeccionSucursales } from "../../_components/seccion-sucursales";
 import { obtenerCliente, actualizarCliente } from "../../_servicios/cliente.servicio";
 import type { Cliente, DatosGuardarCliente } from "../../_servicios/cliente.servicio";
 
-export default function PaginaEditarCliente({ params }: { params: { id: string } }) {
+export default function PaginaEditarCliente() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const soloLectura = useSearchParams().get("soloLectura") === "1";
   const [cliente,   setCliente]   = useState<Cliente | null>(null);
@@ -19,18 +20,18 @@ export default function PaginaEditarCliente({ params }: { params: { id: string }
   const [exito,     setExito]     = useState(false);
 
   useEffect(() => {
-    obtenerCliente(params.id)
+    obtenerCliente(id)
       .then(setCliente)
       .catch(() => setError("Cliente no encontrado."))
       .finally(() => setCargando(false));
-  }, [params.id]);
+  }, [id]);
 
   const handleGuardar = async (datos: DatosGuardarCliente) => {
     setGuardando(true);
     setError(null);
     setExito(false);
     try {
-      const actualizado = await actualizarCliente(params.id, datos);
+      const actualizado = await actualizarCliente(id, datos);
       setCliente(actualizado);
       setExito(true);
     } catch (e: any) {

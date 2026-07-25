@@ -8,6 +8,14 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/mantenimientos",
 }));
 
+vi.mock("../../../../lib/sesion.servicio", () => ({
+  obtenerSesionActual: () =>
+    Promise.resolve({
+      usuario: { id: "u1", email: "admin@doonflow.demo", nombre: "Admin", rol: "administrador" },
+      alcance: { tipo: "TOTAL" },
+    }),
+}));
+
 beforeAll(() => {
   window.matchMedia = window.matchMedia || ((query: string) => ({
     matches: false,
@@ -29,7 +37,7 @@ describe("Sidebar", () => {
       </ProveedorSidebar>,
     );
 
-    await userEvent.click(screen.getByText("Mantenimientos"));
+    await userEvent.click(await screen.findByText("Mantenimientos"));
 
     const link = screen.getByText("Usuarios").closest("a");
     expect(link).toHaveAttribute("href", "/mantenimientos/usuarios");

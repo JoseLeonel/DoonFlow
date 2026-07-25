@@ -42,7 +42,7 @@ function pregunta(parcial: Partial<NodoArbol> = {}): NodoArbol {
     nivel: 1,
     activo: true,
     puntajeMaximo: 10,
-    reglaComentario: "NUNCA",
+
     evidenciaObligatoria: false,
     evidenciaMinima: 0,
     evidenciaMaxima: 5,
@@ -63,7 +63,7 @@ function panel(parcial: Partial<NodoArbol> = {}): NodoArbol {
     nivel: 0,
     activo: true,
     puntajeMaximo: 0,
-    reglaComentario: "NUNCA",
+
     evidenciaObligatoria: false,
     evidenciaMinima: 0,
     evidenciaMaxima: 0,

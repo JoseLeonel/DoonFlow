@@ -5,6 +5,7 @@ import { sembrarPlantillaBPM } from "./seeds/plantilla-bpm";
 import { sembrarSucursalesDemo } from "./seeds/sucursales-demo";
 import { sembrarUsuariosDemo } from "./seeds/usuarios-demo";
 import { sembrarPermisosGobernanza } from "./seeds/permisos-gobernanza";
+import { sembrarPermisosApelaciones } from "./seeds/permisos-apelaciones";
 import { sembrarPoliticaRetencionDemo } from "./seeds/politica-retencion-demo";
 
 const prisma = new PrismaClient();
@@ -66,6 +67,9 @@ async function main() {
 
   // Catálogo de permisos de 007-gobernanza-permisos-aprobacion
   await sembrarPermisosGobernanza(prisma);
+
+  // Catálogo de permisos de 011-aceptacion-apelaciones-certificacion
+  await sembrarPermisosApelaciones(prisma);
 
   // Política de retención demo de 010-seguridad-privacidad-continuidad
   await sembrarPoliticaRetencionDemo(prisma, empresaDemo.id);

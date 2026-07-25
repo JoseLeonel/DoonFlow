@@ -30,6 +30,14 @@ export class HallazgoController {
     } catch (e) { next(this.m(e)); }
   };
 
+  /** 2026-07-25 — genera los hallazgos informativos desde los 3 comentarios siempre visibles de cada pregunta. */
+  generarDesdeComentarios = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const hallazgos = await this.usecase.sincronizarComentariosCategorizados(req.params["id"]!, req.usuario!.empresaId, req.alcance);
+      res.status(201).json(respuestaExitosa(hallazgos));
+    } catch (e) { next(this.m(e)); }
+  };
+
   actualizar = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = actualizarHallazgoSchema.parse(req.body);

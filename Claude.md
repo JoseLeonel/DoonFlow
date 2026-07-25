@@ -12,7 +12,7 @@ DoonFlow digitaliza y conecta toda la cadena agroalimentaria: desde la gestión 
 
 | Capa | Tecnología |
 |---|---|
-| Frontend | Next.js 14+ (App Router) + React + TailwindCSS |
+| Frontend | Next.js 16 (App Router) + React 19 + TailwindCSS |
 | Backend | Node.js + Express |
 | Base de datos | PostgreSQL vía Supabase |
 | ORM | Prisma |
@@ -259,6 +259,7 @@ Ningún agente introduce ni reutiliza un componente, paquete npm, API o campo de
 - Tablas de BD: `snake_case` en singular → `finca`, `lote_cultivo`, `movimiento_inventario`
 - Archivos: `kebab-case` → `formulario-finca.tsx`, `servicio-trazabilidad.ts`
 - Constantes: `SCREAMING_SNAKE_CASE` → `ESTADO_CULTIVO`, `ROL_ADMIN`
+- **Excepción — hooks de React**: los custom hooks se nombran `useAlgo()` (prefijo en inglés "use"), archivo `use-algo.ts`, aunque el resto del nombre siga en español (`useHallazgos`, `useFormularioLogin`). `eslint-plugin-react-hooks` detecta hooks por convención de nombre hardcodeada en inglés — no tiene forma de reconocer un prefijo en español ("usar"), así que todo el proyecto se renombró de `usarX`/`usar-x.ts` a `useX`/`use-x.ts` en 2026-07-22 para poder activar el lint de hooks. Es la única excepción al español en nombres de identificadores.
 
 ### Formato de respuesta de la API
 

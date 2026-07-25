@@ -15,7 +15,6 @@ export type {
   TipoNodo,
   TipoRespuesta,
   ModalidadPuntaje,
-  ReglaComentario,
   NodoOpcion,
 } from "@doonflow/shared";
 
@@ -130,7 +129,6 @@ export interface DatosCrearNodo {
   tipoRespuesta?: string;
   modalidadPuntaje?: string;
   puntajeMaximo?: number;
-  reglaComentario?: string;
   evidenciaObligatoria?: boolean;
   evidenciaMinima?: number;
   evidenciaMaxima?: number;

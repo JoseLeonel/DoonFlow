@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarPoliticaRetencionUseCase } from "../application/casos-uso/gestionar-politica-retencion.usecase";
 import { TipoDatoRetencionInvalidoError } from "../domain/politica-retencion.errors";
 import type { PoliticaRetencionRepositoryPort } from "../domain/politica-retencion.repository.port";
 
-function crearRepoMock(): PoliticaRetencionRepositoryPort & Record<string, Mock> {
-  return { obtenerPorEmpresa: vi.fn(), actualizar: vi.fn() } as unknown as PoliticaRetencionRepositoryPort & Record<string, Mock>;
+function crearRepoMock(): Mocked<PoliticaRetencionRepositoryPort> {
+  return { obtenerPorEmpresa: vi.fn(), actualizar: vi.fn() };
 }
 
 describe("GestionarPoliticaRetencionUseCase", () => {

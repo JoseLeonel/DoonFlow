@@ -13,7 +13,8 @@ export interface DatosIniciarCertificacion {
   plantillaVersion: number;
   inspectorId: string;
   sucursalId: string;
-  periodoEtiqueta: string;
+  fechaInicioPeriodo: Date;
+  fechaFinPeriodo: Date;
 }
 
 export interface DatosRespuestaGuardar {
@@ -25,7 +26,10 @@ export interface DatosRespuestaGuardar {
   tipoRespuesta: string;
   valor?: string | null;
   valores?: string[];
-  comentario?: string | null;
+  /** Siempre visibles en el wizard (ambas respuestas Sí/No) — 2026-07-25, reemplaza al comentario único condicional anterior. */
+  comentarioReconocimiento?: string | null;
+  comentarioObservacion?: string | null;
+  comentarioOportunidadMejora?: string | null;
   puntajeObtenido: number;
   puntajeMaximo: number;
 }
@@ -37,7 +41,9 @@ export interface DetalleGuardado {
   preguntaTitulo: string;
   valor: string | null;
   valores: string[];
-  comentario: string | null;
+  comentarioReconocimiento: string | null;
+  comentarioObservacion: string | null;
+  comentarioOportunidadMejora: string | null;
   puntajeObtenido: number;
   puntajeMaximo: number;
 }
@@ -83,6 +89,14 @@ export interface CertificacionRepositoryPort {
   /** Crea la certificación (Inspeccion) en EN_PROGRESO con la plantilla vigente congelada. */
   iniciar(datos: DatosIniciarCertificacion): Promise<Certificacion>;
 
+  /**
+   * Certificación más reciente de esta sucursal+plantilla cuyo período todavía no venció
+   * (`fechaFinPeriodo >= hoy`), si existe — usada para bloquear el inicio de una nueva mientras
+   * la anterior siga vigente (encontrado en pruebas manuales, 2026-07-24: antes no había ninguna
+   * validación y se podían crear certificaciones duplicadas/superpuestas para la misma sucursal).
+   */
+  buscarPeriodoVigente(sucursalId: string, plantillaId: string, empresaId: string, hoy: Date): Promise<{ id: string; fechaFinPeriodo: Date } | null>;
+
   /** Certificación completa: cabecera + árbol de nodos de la plantilla + respuestas + evidencias. */
   obtenerCompleta(id: string, empresaId: string, alcance?: AlcanceConsulta): Promise<CertificacionCompleta | null>;
 
@@ -99,7 +113,7 @@ export interface CertificacionRepositoryPort {
   guardarEvidencia(inspeccionId: string, detalleId: string, datos: { tipo: string; url: string; nombre: string; tamanoBytes?: number }): Promise<EvidenciaGuardada>;
 
   /** Sucursal (con su cliente) usada para validar que está dentro del alcance del usuario. */
-  obtenerSucursalParaAlcance(sucursalId: string, empresaId: string): Promise<{ id: string; clienteId: string; activo: boolean } | null>;
+  obtenerSucursalParaAlcance(sucursalId: string, empresaId: string): Promise<{ id: string; nombre: string; clienteId: string; activo: boolean } | null>;
 
   /**
    * 012-captura-offline-campo — upsert idempotente de un lote de respuestas pendientes de
@@ -118,6 +132,15 @@ export interface CertificacionRepositoryPort {
   marcarSincronizado(inspeccionId: string, empresaId: string, fecha: Date, capturaOffline: boolean): Promise<void>;
 
   /**
+   * Persiste el puntaje/porcentaje/clasificación recalculados tras guardar respuestas —
+   * encontrado en pruebas manuales (2026-07-24): antes de esto, la `Inspeccion` solo recibía
+   * estos valores al firmar (`sp_inspeccion_firmar`), así que el listado de "Todas las
+   * certificaciones" siempre mostraba 0/0/0%/— para cualquier certificación `EN_PROGRESO`, sin
+   * importar cuánto se hubiera avanzado. No cambia `estado` ni ningún campo de firma.
+   */
+  actualizarResumenProgreso(inspeccionId: string, resumen: { puntajeObtenido: number; puntajeMaximo: number; porcentajeCumplimiento: number; clasificacion: string | null }): Promise<void>;
+
+  /**
    * 005-certificacion-plan-cumplimiento — firma la certificación vía `sp_inspeccion_firmar`:
    * recalcula puntaje/porcentaje/clasificación, fija `resultadoFinal` y `fechaVencimiento`,
    * y persiste el código de verificación dado. Lanza si la fila no existe, si `estado` no es
@@ -128,4 +151,22 @@ export interface CertificacionRepositoryPort {
 
   /** 005-certificacion-plan-cumplimiento — persiste la URL del PDF ya generado tras la firma. */
   establecerPdfUrl(inspeccionId: string, pdfUrl: string): Promise<Certificacion>;
+
+  /**
+   * Cierre liviano ("Guardar y finalizar", 2026-07-24): pone `estado = FINALIZADA` y
+   * `fechaFin = ahora`, sin PDF/código de verificación/vigencia (eso es exclusivo de `firmar`).
+   */
+  finalizar(inspeccionId: string): Promise<Certificacion>;
+
+  /**
+   * 011-aceptacion-apelaciones-certificacion — el cliente reconoce el resultado de una
+   * certificación ya `FIRMADA`. No cambia `estado`, es puramente informativo.
+   */
+  aceptar(inspeccionId: string, usuarioId: string): Promise<Certificacion>;
+
+  /**
+   * 011-aceptacion-apelaciones-certificacion — persiste el `resultadoFinal` recalculado tras
+   * aceptar una apelación `SOBRE_HALLAZGO` (excluyendo del cálculo los hallazgos anulados).
+   */
+  actualizarResultadoFinal(inspeccionId: string, resultadoFinal: string): Promise<Certificacion>;
 }

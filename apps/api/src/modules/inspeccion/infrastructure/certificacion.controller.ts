@@ -5,9 +5,12 @@ import {
   ArchivoNoPermitidoError,
   CertificacionConHallazgoCriticoError,
   CertificacionNoEditableError,
+  CertificacionNoFirmadaError,
+  CertificacionYaAceptadaError,
   CodigoVerificacionEnColisionError,
   InspeccionNoEncontradaError,
   LoteSincronizacionExcedeLimiteError,
+  PeriodoCertificacionVigenteError,
   PlantillaInactivaError,
   PlantillaNoEncontradaError,
   RespuestaNoSincronizadaError,
@@ -20,11 +23,14 @@ import {
   guardarRespuestasSeccionSchema,
   sincronizarLoteSchema,
   firmarCertificacionSchema,
+  finalizarCertificacionSchema,
 } from "../application/certificacion.schema";
 import type { IniciarCertificacionUseCase } from "../application/casos-uso/iniciar-certificacion.usecase";
 import type { ResponderCertificacionUseCase } from "../application/casos-uso/responder-certificacion.usecase";
 import type { SincronizarCapturaOfflineUseCase } from "../application/casos-uso/sincronizar-captura-offline.usecase";
 import type { FirmarCertificacionUseCase } from "../application/casos-uso/firmar-certificacion.usecase";
+import type { FinalizarCertificacionUseCase } from "../application/casos-uso/finalizar-certificacion.usecase";
+import type { AceptarCertificacionUseCase } from "../application/casos-uso/aceptar-certificacion.usecase";
 
 export class CertificacionController {
   constructor(
@@ -32,6 +38,8 @@ export class CertificacionController {
     private readonly responderUc: ResponderCertificacionUseCase,
     private readonly sincronizarUc: SincronizarCapturaOfflineUseCase,
     private readonly firmarUc: FirmarCertificacionUseCase,
+    private readonly aceptarUc: AceptarCertificacionUseCase,
+    private readonly finalizarUc: FinalizarCertificacionUseCase,
   ) {}
 
   iniciar = async (req: Request, res: Response, next: NextFunction) => {
@@ -154,11 +162,33 @@ export class CertificacionController {
     } catch (e) { next(this.m(e)); }
   };
 
+  finalizar = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const input = finalizarCertificacionSchema.parse(req.body);
+      const certificacion = await this.finalizarUc.ejecutar(
+        req.params["id"]!,
+        req.usuario!.empresaId,
+        input,
+        req.alcance,
+      );
+      res.json(respuestaExitosa(certificacion));
+    } catch (e) { next(this.m(e)); }
+  };
+
   obtenerPdf = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const certificacion = await this.responderUc.obtenerCompleta(req.params["id"]!, req.usuario!.empresaId, req.alcance);
       if (!certificacion.pdfUrl) throw new ErrorHttp(404, "pdf_no_disponible", "Esta certificación todavía no tiene un PDF generado.");
       res.json(respuestaExitosa({ url: certificacion.pdfUrl }));
+    } catch (e) { next(this.m(e)); }
+  };
+
+  // ── Aceptación del cliente (011-aceptacion-apelaciones-certificacion) ────
+
+  aceptar = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const certificacion = await this.aceptarUc.ejecutar(req.params["id"]!, req.usuario!.empresaId, req.usuario!.id, req.alcance);
+      res.json(respuestaExitosa(certificacion));
     } catch (e) { next(this.m(e)); }
   };
 
@@ -168,6 +198,7 @@ export class CertificacionController {
     if (e instanceof InspeccionNoEncontradaError)  return new ErrorHttp(404, "certificacion_no_encontrada", e.message);
     if (e instanceof CertificacionNoEditableError) return new ErrorHttp(409, "certificacion_no_editable", e.message);
     if (e instanceof SucursalRequeridaError)       return new ErrorHttp(422, "sucursal_requerida", e.message);
+    if (e instanceof PeriodoCertificacionVigenteError) return new ErrorHttp(409, "periodo_certificacion_vigente", e.message);
     if (e instanceof SucursalFueraDeAlcanceError)  return new ErrorHttp(403, "sucursal_fuera_de_alcance", e.message);
     if (e instanceof ArchivoNoPermitidoError)      return new ErrorHttp(422, "archivo_no_permitido", e.message);
     if (e instanceof LoteSincronizacionExcedeLimiteError) return new ErrorHttp(413, "lote_excede_limite", e.message);
@@ -175,6 +206,8 @@ export class CertificacionController {
     if (e instanceof SincronizacionPendienteError) return new ErrorHttp(409, "sincronizacion_pendiente", e.message);
     if (e instanceof CodigoVerificacionEnColisionError) return new ErrorHttp(500, "codigo_verificacion_colision", e.message);
     if (e instanceof CertificacionConHallazgoCriticoError) return new ErrorHttp(409, "hallazgo_critico_pendiente", e.message);
+    if (e instanceof CertificacionNoFirmadaError) return new ErrorHttp(400, "certificacion_no_firmada", e.message);
+    if (e instanceof CertificacionYaAceptadaError) return new ErrorHttp(409, "certificacion_ya_aceptada", e.message);
     return e;
   }
 }

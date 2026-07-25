@@ -3,9 +3,12 @@
 import Link from "next/link";
 import type { Certificacion } from "../_servicios/certificacion.servicio";
 import { BadgeCapturaOffline } from "./badge-captura-offline";
+import { formatearPeriodoCertificacion } from "../_hooks/formato-periodo";
 
 const ETIQUETA_ESTADO: Record<string, string> = {
   EN_PROGRESO: "En progreso",
+  FINALIZADA: "Finalizada",
+  FIRMADA: "Firmada",
 };
 
 interface PropsTablaCertificaciones {
@@ -52,7 +55,7 @@ export function TablaCertificaciones({ certificaciones, cargando }: PropsTablaCe
           <tbody>
             {certificaciones.map((c) => (
               <tr key={c.id} className="border-b border-stroke last:border-0 dark:border-dark-3">
-                <td className="px-5 py-3.5 text-dark dark:text-white">{c.periodoEtiqueta ?? "—"}</td>
+                <td className="px-5 py-3.5 text-dark dark:text-white">{formatearPeriodoCertificacion(c)}</td>
                 <td className="px-5 py-3.5 text-dark-4 dark:text-dark-6">
                   <div className="flex items-center gap-1.5">
                     <span>{ETIQUETA_ESTADO[c.estado] ?? c.estado}</span>
@@ -64,9 +67,27 @@ export function TablaCertificaciones({ certificaciones, cargando }: PropsTablaCe
                 <td className="px-5 py-3.5 text-dark-4 dark:text-dark-6">{c.clasificacion ?? "—"}</td>
                 <td className="px-5 py-3.5 text-dark-4 dark:text-dark-6">{new Date(c.fechaInicio).toLocaleDateString("es-CR")}</td>
                 <td className="px-5 py-3.5 text-right">
-                  <Link href={`/certificaciones/${c.id}/responder`} className="text-body-xs font-medium text-primary hover:underline">
-                    Continuar
-                  </Link>
+                  <div className="flex items-center justify-end gap-3">
+                    {c.pdfUrl && (
+                      <a
+                        href={c.pdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-body-xs font-medium text-dark-4 hover:text-primary hover:underline dark:text-dark-6"
+                      >
+                        PDF
+                      </a>
+                    )}
+                    {c.estado === "EN_PROGRESO" ? (
+                      <Link href={`/certificaciones/${c.id}/responder`} className="text-body-xs font-medium text-primary hover:underline">
+                        Continuar
+                      </Link>
+                    ) : (
+                      <Link href={`/certificaciones/${c.id}/revision`} className="text-body-xs font-medium text-primary hover:underline">
+                        Ver
+                      </Link>
+                    )}
+                  </div>
                 </td>
               </tr>
             ))}

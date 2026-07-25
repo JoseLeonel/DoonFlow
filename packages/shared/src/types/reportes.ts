@@ -62,3 +62,25 @@ export interface DatosComparativoSucursales {
   periodo: { fechaDesde: string; fechaHasta: string };
   filas: FilaComparativaSucursal[];
 }
+
+// ── Panel ejecutivo (014-panel-calendario-biblioteca, HU-4) ─────────────────
+
+export type TipoItemAtencion = "certificacion_por_vencer" | "accion_vencida";
+
+export interface ItemAtencion {
+  tipo: TipoItemAtencion;
+  sucursal: string;
+  cliente: string;
+  fecha?: string;
+  diasRestantes?: number;
+  descripcion?: string;
+  diasVencida?: number;
+}
+
+export interface PanelEjecutivo {
+  pctSucursalesVigentes: number;
+  certificacionesPorVencer30d: number;
+  hallazgosCriticosAbiertos: number;
+  accionesVencidas: number;
+  atencionRequerida: ItemAtencion[];
+}

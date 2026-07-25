@@ -4,6 +4,75 @@ Ver formato y diferencia con `packages/db/produccion/` en `memoria/cambios_db/RE
 
 ---
 
+## [2026-07-24] Período de certificación como rango de fechas (post-roadmap, exploración manual)
+
+- Tipo: 2 columnas nuevas + 1 índice nuevo (sin tabla nueva)
+- Módulo: `inspeccion` (extensión de `Inspeccion`/certificación)
+- Detalle: `inspeccion.fecha_inicio_periodo` y `.fecha_fin_periodo` (`DATE`, nullable) — rango de vigencia del período auditado, reemplaza `periodo_etiqueta` (texto libre) para certificaciones nuevas. `periodo_etiqueta` se marca `@deprecated` en el schema pero **no se elimina ni se migra** (columna nullable, ~33 filas existentes la siguen usando como único dato de período). Índice `(sucursal_id, plantilla_id, fecha_fin_periodo)` para el lookup de vigencia (`buscarPeriodoVigente`, bloquea iniciar otra certificación para la misma sucursal+plantilla mientras `fecha_fin_periodo >= hoy`).
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260724010000_add_periodo_fechas/migration.sql`
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía `prisma db execute` + registro manual en `_prisma_migrations` (entorno no interactivo, `psql` no disponible en el PATH de esta sesión). `prisma generate` ejecutado (requirió reiniciar el proceso `tsx watch` de `apps/api` que tenía el `.dll` del query engine bloqueado en Windows). Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
+## [2026-07-24] Claves de API para verificación programática — 009-integraciones-datos-masivos (HU-3, retomada)
+
+- Tipo: 1 tabla nueva
+- Módulo: `integraciones` (extensión — HU-1/HU-2 de este mismo módulo ya estaban implementadas desde 2026-07-21; HU-3 había quedado pospuesta por depender del portal `/verificar/[codigo]` de 006, implementado el 2026-07-23).
+- Detalle: `api_key`: `empresa_id` (FK cascade), `nombre`, `clave_hash` (único — hash SHA-256 de la clave real; el texto plano solo se muestra una vez, al crearla, nunca se persiste), `activa` (default `true`, revocar = `false`, no se elimina físicamente), `ultimo_uso_en` (nullable, se actualiza en cada request exitoso a la API pública), `creado_por_id` (FK a `usuario`, `ON DELETE RESTRICT`). Índice único en `clave_hash` (lookup del middleware de autenticación por API key) e índice `(empresa_id, activa)` (listado de la pantalla de gestión).
+- **Nota de diseño**: no se usó `enum` de Prisma para ningún campo de este sprint — `activa` es `Boolean`, no un campo de estado con más de 2 valores, así que no aplica el riesgo ya documentado en 011/006/014 (enum de Prisma vs columna VARCHAR real).
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260724000000_add_api_key/migration.sql`
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía psql + registro manual en `_prisma_migrations` (entorno no interactivo). `prisma generate` ejecutado. Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
+## [2026-07-23] Planificación y biblioteca de hallazgos frecuentes — 014-panel-calendario-biblioteca
+
+- Tipo: 2 tablas nuevas (el panel ejecutivo, HU-4, no agrega tabla — lee agregados vía Prisma desde `reportes`, sin SP nuevo, mismo patrón que 008).
+- Módulo: backend nuevos `planificacion` (calendario de auditorías, HU-5) y `hallazgos-frecuentes` (biblioteca, HU-6).
+- Detalle:
+  - `plan_auditoria`: `sucursal_id` (FK restrict), `fecha_objetivo` (DATE), `responsable_sugerido_id` (FK opcional a `usuario`, `ON DELETE SET NULL`), `estado` (VARCHAR(20), no enum de Postgres — misma lección de 011/006), `inspeccion_id` (FK opcional **única** a `inspeccion`, `ON DELETE SET NULL` — se completa cuando el plan se vincula a una certificación real). Índices `(sucursal_id, fecha_objetivo)`, `(empresa_id, estado)`.
+  - `hallazgo_frecuente`: catálogo simple (`descripcion_hallazgo`, `severidad_sugerida` VARCHAR(10), `descripcion_accion_sugerida` opcional, `activo`). Índice `(empresa_id, activo)`. Nunca se referencia por FK desde `hallazgo` — se copia el texto al usarla (regla 3 de la spec).
+- **Desviación real de diseño**: el `task.md`/`impl.md` originales (2026-07-16) pedían vincular `PlanAuditoria.inspeccionId` **al firmar** la certificación (llamando `PATCH /planificacion/:id/ejecutar` desde el caso de uso de firma de 005). Se vinculó en su lugar **al iniciar** la certificación (`POST /inspeccion/certificaciones` con `planId` opcional en el body) — evita tener que arrastrar el `planId` a través de todo el wizard (iniciar → responder → revisión → firmar, varios pasos y posiblemente varias sesiones) hasta el momento de la firma, y refleja mejor que el plan "se ejecutó" en cuanto la auditoría realmente arrancó, no solo si además se llega a firmar. Documentado en `impl.md`.
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260723180000_add_planificacion_hallazgos_frecuentes/migration.sql`
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía psql + registro manual en `_prisma_migrations`. `prisma generate` ejecutado. Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
+## [2026-07-23] Notificaciones — 006-vigencia-notificaciones-portal
+
+- Tipo: 1 tabla nueva + 2 stored procedures nuevos
+- Módulo: backend nuevos `notificaciones` (in-app, job diario) y `verificacion` (portal público de solo lectura, sin tabla propia — lee campos ya públicos de `inspeccion`).
+- Detalle:
+  - `notificacion`: `usuario_id` (FK cascade), `tipo`/`referencia_tipo` (VARCHAR, no enum de Postgres — misma lección de 011), `referencia_id`, `mensaje`, `leida_en` (nullable), `enviada_por_correo` (default `false`), `empresa_id` (FK cascade). Índices `(usuario_id, leida_en)`, `(empresa_id, creado_en)`, `(referencia_tipo, referencia_id, tipo, creado_en)` (idempotencia del job).
+  - `sp_notificacion_generar_vencimientos()`: recorre `accion_correctiva` (no terminal, a 30/15/5/0 días de `fecha_limite` o ya vencida) e `inspeccion` (`FIRMADA`, a 30/15/5/0 días de `fecha_vencimiento`), inserta `ACCION_POR_VENCER`/`ACCION_VENCIDA`/`CERTIFICACION_POR_VENCER` sin duplicar en 24h (usa el índice compuesto). El destinatario de la notificación de certificación es todo `usuario` con alcance sobre esa sucursal (administrador de empresa, administrador_cliente del cliente dueño, usuario_sucursal directo o vía `usuario_sucursal_acceso`).
+  - `sp_accion_correctiva_escalar()`: recorre `accion_correctiva` vencida hace más de 7 días sin `ACCION_ESCALADA` previa, notifica al `administrador_cliente` del cliente dueño (resuelto vía `hallazgo → inspeccion → sucursal → cliente`) o, si no hay ninguno, al primer `administrador` de la empresa. **Desviación real**: el `task.md`/`impl.md` originales (2026-07-16) decían "cae al administrador_general de la empresa" — ese rol no existe en `ROLES_SISTEMA` (misma lección ya documentada en 011); se usa `administrador` real.
+  - **Bug real encontrado y corregido en la verificación E2E de la misma sesión**: la primera versión de `sp_accion_correctiva_escalar()` filtraba `WHERE ac.estado = 'VENCIDO'` — pero `'VENCIDO'` **nunca se persiste** en la columna `estado` de `accion_correctiva` (013 lo calcula solo en lectura vía `calcularEstadoEfectivo()`, documentado en `domain/accion-correctiva.entity.ts`), así que el filtro no encontraba ninguna fila jamás y el escalamiento (HU-7) quedaba silenciosamente roto. Corregido a `estado NOT IN ('CUMPLIDO', 'NO_CUMPLIDO') AND fecha_limite < now() - interval '7 days'` (misma lógica que `calcularEstadoEfectivo`). Detectado forzando una acción vencida vía `UPDATE` directo y confirmando que la primera versión del SP no la encontraba.
+- Los eventos síncronos `ACCION_ASIGNADA` (al crear una `AccionCorrectiva`) y `HALLAZGO_CRITICO` (al registrar un hallazgo `CRITICA`) no pasan por SP — se disparan inline desde los casos de uso existentes del módulo `inspeccion`, vía un wrapper `RegistradorNotificacion`/`NotificadorCliente` (mismo patrón que `RegistradorEventoAuditoria` de 010).
+- Job diario: `node-cron`, mismo patrón que `job-purgar-retencion.job.ts` (010) — no una abstracción `programador.ts` genérica separada, para no introducir una capa que el resto del proyecto no usa.
+- **RLS**: no se agregan policies nuevas — mismo patrón sin RLS real desde 007.
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260723120000_add_notificaciones/migration.sql`, `packages/db/sql/procedimientos/sp_notificacion_generar_vencimientos.sql`, `packages/db/sql/procedimientos/sp_accion_correctiva_escalar.sql`
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía psql + registro manual en `_prisma_migrations`. `prisma generate` ejecutado. Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
+## [2026-07-23] Aceptación del cliente y apelaciones — 011-aceptacion-apelaciones-certificacion
+
+- Tipo: 2 columnas nuevas en `inspeccion` + 1 columna nueva en `hallazgo` + 1 tabla nueva + 1 permiso nuevo
+- Módulo: `inspeccion` (aceptación, mismo módulo de 005/013) + módulo backend nuevo `apelaciones` (hexagonal propio, consume `inspeccion`/`hallazgo` solo vía puerto).
+- Detalle:
+  - `inspeccion.aceptado_por_cliente_id` (FK opcional a `usuario`, `ON DELETE SET NULL`) / `aceptado_en` (TIMESTAMP): reconocimiento informativo del cliente sobre una certificación `FIRMADA` — no cambia `estado`, no bloquea el certificado.
+  - `hallazgo.estado` (VARCHAR(30), default `'ACTIVO'`, acepta `'ANULADO_POR_APELACION'`): campo nuevo y **separado** de `severidad` (reutilizarla habría roto el cálculo de `resultadoFinal` de 013). `calcularResultadoFinal()` (013) se reutiliza sin cambios, filtrando primero los hallazgos `ACTIVO` antes de pasarlos.
+  - `apelacion`: `inspeccion_id` (FK cascade), `hallazgo_id` (FK opcional, `ON DELETE SET NULL` — null si `tipo=SOBRE_RESULTADO`), `tipo`/`estado` (TEXT, no enum de Postgres a nivel SQL aunque el schema de Prisma sí los declara como enum — mismo criterio ya usado en `plan_cumplimiento.estado`/`accion_correctiva.estado`), `motivo`, `solicitado_por_id`/`resuelto_por_id` (FK a `usuario`), `resolucion_comentario`. Índices `(empresa_id, estado)`, `(inspeccion_id)`, `(hallazgo_id)`.
+  - Permiso `apelaciones.resolver` (catálogo, upsert por `codigo`) vía `packages/db/prisma/seeds/permisos-apelaciones.ts`.
+- **Desviaciones respecto al plan original (`task.md`/`impl.md` del sprint, escritos 2026-07-16 antes de que 004/007 fijaran los nombres reales)**:
+  - El rol `administrador_general` que el plan pedía asignar junto a `auditor` **no existe** en `ROLES_SISTEMA` (los roles reales son `administrador`/`productor`/`operario`/`auditor`/`cliente_externo`/`administrador_cliente`/`usuario_sucursal`, fijados desde 004) — probablemente una referencia genérica que quedó desactualizada.
+  - Siguiendo el mismo criterio que `sembrarPermisosGobernanza` (007), el seed **no asigna** `RolPermiso` por defecto ni siquiera a `auditor` — el permiso se crea en el catálogo y un administrador lo asigna desde la matriz `/mantenimientos/roles`. Es más consistente con el resto del proyecto que el automatismo pedido originalmente.
+  - No se agregan policies RLS nuevas — mismo patrón sin RLS real desde 007 (aislamiento multiempresa vive en `infrastructure/`, filtrando siempre por `empresaId`).
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260723000000_add_aceptacion_apelaciones/migration.sql`, `packages/db/prisma/seeds/permisos-apelaciones.ts`
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía psql + registro manual en `_prisma_migrations` (entorno no interactivo). `prisma generate` ejecutado. Seed corrido dos veces sin duplicar el permiso. Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
 ## [2026-07-22] Hallazgos y plan de cumplimiento — 013-hallazgos-plan-cumplimiento
 
 - Tipo: 5 tablas nuevas + 1 stored procedure reemplazado (`CREATE OR REPLACE`) + 1 stored procedure nuevo

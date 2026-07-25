@@ -1,31 +1,29 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { ResponderCertificacionUseCase } from "../application/casos-uso/responder-certificacion.usecase";
 import { CertificacionNoEditableError, InspeccionNoEncontradaError } from "../domain/inspeccion.errors";
 import type { AlmacenamientoEvidenciasPort } from "../domain/almacenamiento-evidencias.port";
 import type { CertificacionRepositoryPort, CertificacionCompleta } from "../domain/certificacion.repository.port";
 import type { NodoArbol } from "../domain/plantilla.entity";
 
-function crearRepoMock(): CertificacionRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<CertificacionRepositoryPort> {
   return {
-    iniciar: vi.fn(),
-    obtenerCompleta: vi.fn(),
-    listar: vi.fn(),
-    guardarRespuestasSeccion: vi.fn(),
-    guardarEvidencia: vi.fn(),
-    obtenerSucursalParaAlcance: vi.fn(),
-  } as unknown as CertificacionRepositoryPort & Record<string, Mock>;
+    iniciar: vi.fn(), obtenerCompleta: vi.fn(), listar: vi.fn(), guardarRespuestasSeccion: vi.fn(),
+    guardarEvidencia: vi.fn(), obtenerSucursalParaAlcance: vi.fn(), upsertDetallesConResolucionConflicto: vi.fn(),
+    marcarSincronizado: vi.fn(), firmar: vi.fn(), establecerPdfUrl: vi.fn(), aceptar: vi.fn(), actualizarResultadoFinal: vi.fn(), actualizarResumenProgreso: vi.fn(),
+    buscarPeriodoVigente: vi.fn(), finalizar: vi.fn(),
+  };
 }
 
-function crearAlmacenamientoMock(): AlmacenamientoEvidenciasPort & Record<string, Mock> {
-  return { subirArchivo: vi.fn() } as unknown as AlmacenamientoEvidenciasPort & Record<string, Mock>;
+function crearAlmacenamientoMock(): Mocked<AlmacenamientoEvidenciasPort> {
+  return { subirArchivo: vi.fn() };
 }
 
 function nodoPregunta(id: string, parcial: Partial<NodoArbol> = {}): NodoArbol {
   return {
     id, padreId: "s1", tipo: "PREGUNTA", codigo: id, titulo: `Pregunta ${id}`,
     orden: 0, nivel: 1, activo: true, tipoRespuesta: "SI_NO", puntajeMaximo: 10,
-    reglaComentario: "NUNCA", evidenciaObligatoria: false, evidenciaMinima: 0,
+ evidenciaObligatoria: false, evidenciaMinima: 0,
     evidenciaMaxima: 0, opciones: [], hijos: [], ...parcial,
   };
 }
@@ -33,12 +31,13 @@ function nodoPregunta(id: string, parcial: Partial<NodoArbol> = {}): NodoArbol {
 function certificacionCompleta(parcial: Partial<CertificacionCompleta> = {}): CertificacionCompleta {
   return {
     id: "cert1", empresaId: "e1", plantillaId: "p1", plantillaVersion: 1, inspectorId: "insp1",
-    sucursalId: "s1", periodoEtiqueta: "Julio 2026", estado: "EN_PROGRESO",
+    sucursalId: "s1", periodoEtiqueta: null, fechaInicioPeriodo: new Date("2026-07-01"), fechaFinPeriodo: new Date("2026-07-31"), estado: "EN_PROGRESO",
     fechaInicio: new Date(), fechaFin: null, puntajeObtenido: 0, puntajeMaximo: 100,
     porcentajeCumplimiento: 0, clasificacion: null, observaciones: null,
     capturaOffline: false, sincronizadoEn: null,
     firmadoPorId: null, firmadoEn: null, codigoVerificacion: null, pdfUrl: null,
     fechaVencimiento: null, resultadoFinal: null,
+    aceptadoPorClienteId: null, aceptadoEn: null,
     creadoEn: new Date(), actualizadoEn: new Date(),
     plantilla: { id: "p1", nombre: "Ficha", puntajeMaximo: 100, nodos: [], rangosResultado: [] },
     detalles: [], evidencias: [],
@@ -75,7 +74,7 @@ describe("ResponderCertificacionUseCase", () => {
     it("calcula el snapshot (ruta/título/puntaje) solo para los nodoId recibidos y los pasa al repositorio", async () => {
       const seccion: NodoArbol = {
         id: "s1", padreId: null, tipo: "PANEL", codigo: "S1", titulo: "Sección 1", orden: 0, nivel: 0,
-        activo: true, puntajeMaximo: 0, reglaComentario: "NUNCA", evidenciaObligatoria: false,
+        activo: true, puntajeMaximo: 0, evidenciaObligatoria: false,
         evidenciaMinima: 0, evidenciaMaxima: 0, opciones: [],
         hijos: [nodoPregunta("n1"), nodoPregunta("n2")],
       };
@@ -97,12 +96,12 @@ describe("ResponderCertificacionUseCase", () => {
       const pregunta = nodoPregunta("n1", { puntajeMaximo: 50 });
       const seccion: NodoArbol = {
         id: "s1", padreId: null, tipo: "PANEL", codigo: "S1", titulo: "Sección 1", orden: 0, nivel: 0,
-        activo: true, puntajeMaximo: 0, reglaComentario: "NUNCA", evidenciaObligatoria: false,
+        activo: true, puntajeMaximo: 0, evidenciaObligatoria: false,
         evidenciaMinima: 0, evidenciaMaxima: 0, opciones: [], hijos: [pregunta],
       };
       repo.obtenerCompleta.mockResolvedValue(certificacionCompleta({
         plantilla: { id: "p1", nombre: "Ficha", puntajeMaximo: 50, nodos: [seccion], rangosResultado: [] },
-        detalles: [{ id: "d1", nodoId: "n1", valor: "SI", valores: [], comentario: null, puntajeObtenido: 50, puntajeMaximo: 50 }],
+        detalles: [{ id: "d1", nodoId: "n1", preguntaTitulo: "Pregunta n1", valor: "SI", valores: [], comentarioReconocimiento: null, comentarioObservacion: null, comentarioOportunidadMejora: null, puntajeObtenido: 50, puntajeMaximo: 50 }],
       }));
 
       const resumen = await uc.obtenerResumen("cert1", "e1");

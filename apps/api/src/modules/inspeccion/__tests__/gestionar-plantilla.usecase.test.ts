@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarPlantillaUseCase } from "../application/casos-uso/gestionar-plantilla.usecase";
 import {
   ComentarioResolucionRequeridoError,
@@ -14,7 +14,7 @@ import type { Plantilla, PlantillaCompleta, NodoArbol, RangoResultado } from "..
 
 // ── Repositorio simulado ───────────────────────────────────────────────────────
 
-function crearRepoMock(): PlantillaRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<PlantillaRepositoryPort> {
   return {
     listar: vi.fn(),
     obtenerCompleta: vi.fn(),
@@ -31,11 +31,11 @@ function crearRepoMock(): PlantillaRepositoryPort & Record<string, Mock> {
     guardarRangos: vi.fn(),
     cambiarEstadoAprobacion: vi.fn(),
     listarPendientesAprobacion: vi.fn(),
-  } as unknown as PlantillaRepositoryPort & Record<string, Mock>;
+  };
 }
 
-function crearAuditoriaMock(): AuditoriaRepositoryPort & Record<string, Mock> {
-  return { registrar: vi.fn() } as unknown as AuditoriaRepositoryPort & Record<string, Mock>;
+function crearAuditoriaMock(): Mocked<AuditoriaRepositoryPort> {
+  return { registrar: vi.fn() };
 }
 
 // ── Fábricas ────────────────────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ describe("GestionarPlantillaUseCase", () => {
 
       await uc.crearNodo("p1", "e1", {
         tipo: "PANEL", codigo: "S1", titulo: "Sección", orden: 0,
-      });
+      } as any);
 
       expect(repo.crearNodo).toHaveBeenCalledWith(
         expect.objectContaining({ nivel: 0, plantillaId: "p1", empresaId: "e1" }),
@@ -171,7 +171,7 @@ describe("GestionarPlantillaUseCase", () => {
       const padreNodo: NodoArbol = {
         id: "s1", padreId: null, tipo: "PANEL", codigo: "S1", titulo: "Sección",
         orden: 0, nivel: 0, activo: true, puntajeMaximo: 0,
-        reglaComentario: "NUNCA", evidenciaObligatoria: false,
+ evidenciaObligatoria: false,
         evidenciaMinima: 0, evidenciaMaxima: 0, opciones: [], hijos: [],
       };
       repo.obtenerCompleta.mockResolvedValue(plantillaCompleta({ nodos: [padreNodo] }));
@@ -179,7 +179,7 @@ describe("GestionarPlantillaUseCase", () => {
 
       await uc.crearNodo("p1", "e1", {
         tipo: "PREGUNTA", codigo: "P1", titulo: "Pregunta", orden: 0, padreId: "s1",
-      });
+      } as any);
 
       expect(repo.crearNodo).toHaveBeenCalledWith(
         expect.objectContaining({ nivel: 1, padreId: "s1" }),
@@ -190,7 +190,7 @@ describe("GestionarPlantillaUseCase", () => {
       repo.obtenerCompleta.mockResolvedValue(null);
 
       await expect(
-        uc.crearNodo("p1", "e1", { tipo: "PANEL", codigo: "S1", titulo: "S", orden: 0 }),
+        uc.crearNodo("p1", "e1", { tipo: "PANEL", codigo: "S1", titulo: "S", orden: 0 } as any),
       ).rejects.toThrow(PlantillaNoEncontradaError);
     });
   });
@@ -244,7 +244,7 @@ describe("GestionarPlantillaUseCase", () => {
     it("lanza EstadoAprobacionInvalidoError si la plantilla no está en BORRADOR", async () => {
       const pregunta: NodoArbol = {
         id: "n1", padreId: null, tipo: "PREGUNTA", codigo: "P1", titulo: "P", orden: 0, nivel: 0,
-        activo: true, puntajeMaximo: 10, reglaComentario: "NUNCA", evidenciaObligatoria: false,
+        activo: true, puntajeMaximo: 10, evidenciaObligatoria: false,
         evidenciaMinima: 0, evidenciaMaxima: 0, opciones: [], hijos: [],
       };
       repo.obtenerCompleta.mockResolvedValue(plantillaCompleta({ nodos: [pregunta], estadoAprobacion: "EN_REVISION" }));
@@ -255,7 +255,7 @@ describe("GestionarPlantillaUseCase", () => {
     it("envía a revisión, registra auditoría y setea solicitadoPorId/solicitadoEn", async () => {
       const pregunta: NodoArbol = {
         id: "n1", padreId: null, tipo: "PREGUNTA", codigo: "P1", titulo: "P", orden: 0, nivel: 0,
-        activo: true, puntajeMaximo: 10, reglaComentario: "NUNCA", evidenciaObligatoria: false,
+        activo: true, puntajeMaximo: 10, evidenciaObligatoria: false,
         evidenciaMinima: 0, evidenciaMaxima: 0, opciones: [], hijos: [],
       };
       const p = plantillaCompleta({ nodos: [pregunta], estadoAprobacion: "BORRADOR" });

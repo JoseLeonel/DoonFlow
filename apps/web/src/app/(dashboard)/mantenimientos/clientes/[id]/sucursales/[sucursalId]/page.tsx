@@ -1,27 +1,26 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
-import { usarHistoricoSucursal } from "../../../_hooks/usar-historico-sucursal";
+import { useHistoricoSucursal } from "../../../_hooks/use-historico-sucursal";
 import { TablaHistoricoCertificaciones } from "../../../_components/tabla-historico-certificaciones";
+import { GraficoHistoricoCertificaciones } from "../../../_components/grafico-historico-certificaciones";
 import { obtenerCliente } from "../../../_servicios/cliente.servicio";
 import { obtenerSucursal } from "../../../_servicios/sucursal.servicio";
 import type { Cliente } from "../../../_servicios/cliente.servicio";
 import type { Sucursal } from "../../../_servicios/sucursal.servicio";
 
-export default function PaginaHistoricoSucursal({
-  params,
-}: {
-  params: { id: string; sucursalId: string };
-}) {
-  const { historico, cargando, error } = usarHistoricoSucursal(params.sucursalId);
+export default function PaginaHistoricoSucursal() {
+  const { id, sucursalId } = useParams<{ id: string; sucursalId: string }>();
+  const { historico, cargando, error } = useHistoricoSucursal(sucursalId);
   const [cliente,   setCliente]   = useState<Cliente | null>(null);
   const [sucursal,  setSucursal]  = useState<Sucursal | null>(null);
 
   useEffect(() => {
-    obtenerCliente(params.id).then(setCliente).catch(() => {});
-    obtenerSucursal(params.sucursalId).then(setSucursal).catch(() => {});
-  }, [params.id, params.sucursalId]);
+    obtenerCliente(id).then(setCliente).catch(() => {});
+    obtenerSucursal(sucursalId).then(setSucursal).catch(() => {});
+  }, [id, sucursalId]);
 
   return (
     <div className="p-6 md:p-7.5">
@@ -30,7 +29,7 @@ export default function PaginaHistoricoSucursal({
         <span className="mx-1.5">/</span>
         <Link href="/mantenimientos/clientes" className="hover:text-primary">Clientes</Link>
         <span className="mx-1.5">/</span>
-        <Link href={`/mantenimientos/clientes/${params.id}/editar`} className="hover:text-primary">
+        <Link href={`/mantenimientos/clientes/${id}/editar`} className="hover:text-primary">
           {cliente?.empresa ?? "…"}
         </Link>
         <span className="mx-1.5">/</span>
@@ -66,6 +65,7 @@ export default function PaginaHistoricoSucursal({
             )}
           </div>
 
+          <GraficoHistoricoCertificaciones registros={historico?.registros ?? []} />
           <TablaHistoricoCertificaciones registros={historico?.registros ?? []} />
         </>
       )}

@@ -23,6 +23,8 @@ function mapCertificacion(i: any): Certificacion {
     inspectorId: i.inspectorId,
     sucursalId: i.sucursalId ?? null,
     periodoEtiqueta: i.periodoEtiqueta ?? null,
+    fechaInicioPeriodo: i.fechaInicioPeriodo ?? null,
+    fechaFinPeriodo: i.fechaFinPeriodo ?? null,
     estado: i.estado,
     fechaInicio: i.fechaInicio,
     fechaFin: i.fechaFin ?? null,
@@ -39,6 +41,8 @@ function mapCertificacion(i: any): Certificacion {
     pdfUrl: i.pdfUrl ?? null,
     fechaVencimiento: i.fechaVencimiento ?? null,
     resultadoFinal: i.resultadoFinal ?? null,
+    aceptadoPorClienteId: i.aceptadoPorClienteId ?? null,
+    aceptadoEn: i.aceptadoEn ?? null,
     creadoEn: i.creadoEn,
     actualizadoEn: i.actualizadoEn,
   };
@@ -58,6 +62,8 @@ function mapCertificacionCruda(i: any): Certificacion {
     inspectorId: i.inspector_id,
     sucursalId: i.sucursal_id ?? null,
     periodoEtiqueta: i.periodo_etiqueta ?? null,
+    fechaInicioPeriodo: i.fecha_inicio_periodo ?? null,
+    fechaFinPeriodo: i.fecha_fin_periodo ?? null,
     estado: i.estado,
     fechaInicio: i.fecha_inicio,
     fechaFin: i.fecha_fin ?? null,
@@ -74,6 +80,8 @@ function mapCertificacionCruda(i: any): Certificacion {
     pdfUrl: i.pdf_url ?? null,
     fechaVencimiento: i.fecha_vencimiento ?? null,
     resultadoFinal: i.resultado_final ?? null,
+    aceptadoPorClienteId: i.aceptado_por_cliente_id ?? null,
+    aceptadoEn: i.aceptado_en ?? null,
     creadoEn: i.creado_en,
     actualizadoEn: i.actualizado_en,
   };
@@ -86,7 +94,9 @@ function mapDetalle(d: any): DetalleGuardado {
     preguntaTitulo: d.preguntaTitulo,
     valor: d.respuestaValor ?? null,
     valores: d.respuestasMultiples ?? [],
-    comentario: d.comentario ?? null,
+    comentarioReconocimiento: d.comentarioReconocimiento ?? null,
+    comentarioObservacion: d.comentarioObservacion ?? null,
+    comentarioOportunidadMejora: d.comentarioOportunidadMejora ?? null,
     puntajeObtenido: Number(d.puntajeObtenido),
     puntajeMaximo: Number(d.puntajeMaximo),
   };
@@ -114,12 +124,27 @@ export class CertificacionPrismaRepository implements CertificacionRepositoryPor
         plantillaVersion: datos.plantillaVersion,
         inspectorId: datos.inspectorId,
         sucursalId: datos.sucursalId,
-        periodoEtiqueta: datos.periodoEtiqueta,
+        fechaInicioPeriodo: datos.fechaInicioPeriodo,
+        fechaFinPeriodo: datos.fechaFinPeriodo,
         fechaInicio: new Date(),
         estado: "EN_PROGRESO",
       },
     });
     return mapCertificacion(i);
+  }
+
+  async buscarPeriodoVigente(
+    sucursalId: string,
+    plantillaId: string,
+    empresaId: string,
+    hoy: Date,
+  ): Promise<{ id: string; fechaFinPeriodo: Date } | null> {
+    const i = await this.prisma.inspeccion.findFirst({
+      where: { empresaId, sucursalId, plantillaId, fechaFinPeriodo: { gte: hoy } },
+      orderBy: { fechaFinPeriodo: "desc" },
+      select: { id: true, fechaFinPeriodo: true },
+    });
+    return i?.fechaFinPeriodo ? { id: i.id, fechaFinPeriodo: i.fechaFinPeriodo } : null;
   }
 
   async obtenerCompleta(id: string, empresaId: string, alcance?: AlcanceConsulta): Promise<CertificacionCompleta | null> {
@@ -202,7 +227,9 @@ export class CertificacionPrismaRepository implements CertificacionRepositoryPor
           tipoRespuesta: r.tipoRespuesta,
           respuestaValor: r.valor ?? null,
           respuestasMultiples: r.valores ?? [],
-          comentario: r.comentario ?? null,
+          comentarioReconocimiento: r.comentarioReconocimiento ?? null,
+          comentarioObservacion: r.comentarioObservacion ?? null,
+          comentarioOportunidadMejora: r.comentarioOportunidadMejora ?? null,
           puntajeObtenido: r.puntajeObtenido,
           puntajeMaximo: r.puntajeMaximo,
         };
@@ -230,10 +257,10 @@ export class CertificacionPrismaRepository implements CertificacionRepositoryPor
     return mapEvidencia(e);
   }
 
-  async obtenerSucursalParaAlcance(sucursalId: string, empresaId: string): Promise<{ id: string; clienteId: string; activo: boolean } | null> {
+  async obtenerSucursalParaAlcance(sucursalId: string, empresaId: string): Promise<{ id: string; nombre: string; clienteId: string; activo: boolean } | null> {
     const s = await this.prisma.sucursal.findFirst({ where: { id: sucursalId, empresaId } });
     if (!s) return null;
-    return { id: s.id, clienteId: s.clienteId, activo: s.activo };
+    return { id: s.id, nombre: s.nombre, clienteId: s.clienteId, activo: s.activo };
   }
 
   async upsertDetallesConResolucionConflicto(
@@ -263,7 +290,9 @@ export class CertificacionPrismaRepository implements CertificacionRepositoryPor
           tipoRespuesta: d.tipoRespuesta,
           respuestaValor: d.valor ?? null,
           respuestasMultiples: d.valores ?? [],
-          comentario: d.comentario ?? null,
+          comentarioReconocimiento: d.comentarioReconocimiento ?? null,
+          comentarioObservacion: d.comentarioObservacion ?? null,
+          comentarioOportunidadMejora: d.comentarioOportunidadMejora ?? null,
           puntajeObtenido: d.puntajeObtenido,
           puntajeMaximo: d.puntajeMaximo,
         };
@@ -284,6 +313,21 @@ export class CertificacionPrismaRepository implements CertificacionRepositoryPor
     });
   }
 
+  async actualizarResumenProgreso(
+    inspeccionId: string,
+    resumen: { puntajeObtenido: number; puntajeMaximo: number; porcentajeCumplimiento: number; clasificacion: string | null },
+  ): Promise<void> {
+    await this.prisma.inspeccion.update({
+      where: { id: inspeccionId },
+      data: {
+        puntajeObtenido: resumen.puntajeObtenido,
+        puntajeMaximo: resumen.puntajeMaximo,
+        porcentajeCumplimiento: resumen.porcentajeCumplimiento,
+        clasificacion: resumen.clasificacion,
+      },
+    });
+  }
+
   // ── Firma (005-certificacion-plan-cumplimiento, retomado) ────────────────
 
   async firmar(inspeccionId: string, usuarioId: string, codigoVerificacion: string): Promise<Certificacion> {
@@ -297,6 +341,29 @@ export class CertificacionPrismaRepository implements CertificacionRepositoryPor
 
   async establecerPdfUrl(inspeccionId: string, pdfUrl: string): Promise<Certificacion> {
     const i = await this.prisma.inspeccion.update({ where: { id: inspeccionId }, data: { pdfUrl } });
+    return mapCertificacion(i);
+  }
+
+  async finalizar(inspeccionId: string): Promise<Certificacion> {
+    const i = await this.prisma.inspeccion.update({
+      where: { id: inspeccionId },
+      data: { estado: "FINALIZADA", fechaFin: new Date() },
+    });
+    return mapCertificacion(i);
+  }
+
+  // ── Aceptación y apelaciones (011-aceptacion-apelaciones-certificacion) ──
+
+  async aceptar(inspeccionId: string, usuarioId: string): Promise<Certificacion> {
+    const i = await this.prisma.inspeccion.update({
+      where: { id: inspeccionId },
+      data: { aceptadoPorClienteId: usuarioId, aceptadoEn: new Date() },
+    });
+    return mapCertificacion(i);
+  }
+
+  async actualizarResultadoFinal(inspeccionId: string, resultadoFinal: string): Promise<Certificacion> {
+    const i = await this.prisma.inspeccion.update({ where: { id: inspeccionId }, data: { resultadoFinal } });
     return mapCertificacion(i);
   }
 }

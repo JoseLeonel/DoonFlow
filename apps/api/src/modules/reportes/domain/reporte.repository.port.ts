@@ -1,6 +1,7 @@
 import type {
   DatosComparativoSucursales,
   DatosConsolidadoCliente,
+  DatosPanelEjecutivoCrudo,
   FiltrosReporte,
   FormatoReporte,
   ReporteGenerado,
@@ -53,4 +54,7 @@ export interface ReporteRepositoryPort {
     fechaDesde: string,
     fechaHasta: string,
   ): Promise<DatosComparativoSucursales>;
+
+  /** 014-panel-calendario-biblioteca — datos crudos agregados del panel ejecutivo (HU-4). */
+  obtenerPanelEjecutivo(empresaId: string, clienteId?: string): Promise<DatosPanelEjecutivoCrudo>;
 }

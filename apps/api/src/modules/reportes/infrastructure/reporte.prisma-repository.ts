@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 import type {
   DatosComparativoSucursales,
   DatosConsolidadoCliente,
+  DatosPanelEjecutivoCrudo,
   FilaComparativaSucursal,
   FilaConsolidadoSucursal,
   ReporteGenerado,
@@ -165,6 +166,60 @@ export class ReportePrismaRepository implements ReporteRepositoryPort {
       clienteNombre: cliente?.empresa ?? "",
       periodo: { fechaDesde, fechaHasta },
       filas,
+    };
+  }
+
+  // ── Panel ejecutivo (014-panel-calendario-biblioteca, HU-4) ────────────────
+
+  async obtenerPanelEjecutivo(empresaId: string, clienteId?: string): Promise<DatosPanelEjecutivoCrudo> {
+    const ahora = new Date();
+    const en30dias = new Date(ahora.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const whereSucursal = { empresaId, activo: true, ...(clienteId ? { clienteId } : {}) };
+    const whereSucursalRelacion = clienteId ? { clienteId } : {};
+
+    const [totalSucursales, sucursalesVigentes, certificacionesPorVencerRaw, hallazgosCriticosAbiertos, accionesVencidasRaw] =
+      await Promise.all([
+        this.prisma.sucursal.count({ where: whereSucursal }),
+        this.prisma.sucursal.count({
+          where: { ...whereSucursal, inspecciones: { some: { estado: "FIRMADA", fechaVencimiento: { gte: ahora } } } },
+        }),
+        this.prisma.inspeccion.findMany({
+          where: { empresaId, estado: "FIRMADA", fechaVencimiento: { gte: ahora, lte: en30dias }, sucursal: whereSucursalRelacion },
+          select: { fechaVencimiento: true, sucursal: { select: { nombre: true, cliente: { select: { empresa: true } } } } },
+          orderBy: { fechaVencimiento: "asc" },
+        }),
+        this.prisma.hallazgo.count({
+          where: {
+            empresaId, severidad: "CRITICA", estado: "ACTIVO",
+            acciones: { none: { estado: "CUMPLIDO" } },
+            inspeccion: { sucursal: whereSucursalRelacion },
+          },
+        }),
+        this.prisma.accionCorrectiva.findMany({
+          where: {
+            estado: { notIn: ["CUMPLIDO", "NO_CUMPLIDO"] },
+            fechaLimite: { lt: ahora },
+            hallazgo: { empresaId, inspeccion: { sucursal: whereSucursalRelacion } },
+          },
+          select: {
+            descripcion: true, fechaLimite: true,
+            hallazgo: { select: { inspeccion: { select: { sucursal: { select: { nombre: true, cliente: { select: { empresa: true } } } } } } } },
+          },
+          orderBy: { fechaLimite: "asc" },
+        }),
+      ]);
+
+    return {
+      totalSucursales,
+      sucursalesVigentes,
+      certificacionesPorVencer: certificacionesPorVencerRaw.map((i) => ({
+        sucursal: i.sucursal!.nombre, cliente: i.sucursal!.cliente.empresa, fechaVencimiento: i.fechaVencimiento!,
+      })),
+      hallazgosCriticosAbiertos,
+      accionesVencidas: accionesVencidasRaw.map((a) => ({
+        descripcion: a.descripcion, fechaLimite: a.fechaLimite,
+        sucursal: a.hallazgo.inspeccion.sucursal!.nombre, cliente: a.hallazgo.inspeccion.sucursal!.cliente.empresa,
+      })),
     };
   }
 }

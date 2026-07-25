@@ -28,7 +28,7 @@ function esperar(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Único punto de este directorio autorizado a llamar `fetch` — inyectado por quien orquesta (el hook `usar-captura-offline`), nunca importado directamente por los stores. */
+/** Único punto de este directorio autorizado a llamar `fetch` — inyectado por quien orquesta (el hook `use-captura-offline`), nunca importado directamente por los stores. */
 export interface ClienteSincronizacion {
   sincronizarLote(inspeccionId: string, capturaOffline: boolean, respuestas: RespuestaOffline[]): Promise<unknown>;
   subirEvidencia(inspeccionId: string, evidencia: EvidenciaOffline): Promise<unknown>;

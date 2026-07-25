@@ -1,4 +1,4 @@
-import { calcularPuntajeRespuesta, indexarNodosConRuta, puedeEditarRespuestas } from "../../domain/certificacion.entity";
+import { calcularPuntajeRespuesta, calcularResumen, indexarNodosConRuta, puedeEditarRespuestas } from "../../domain/certificacion.entity";
 import {
   CertificacionNoEditableError,
   InspeccionNoEncontradaError,
@@ -72,7 +72,9 @@ export class SincronizarCapturaOfflineUseCase {
           tipoRespuesta: info.nodo.tipoRespuesta ?? "TEXTO_LIBRE",
           valor: r.valor ?? null,
           valores: r.valores ?? [],
-          comentario: r.comentario ?? null,
+          comentarioReconocimiento: r.comentarioReconocimiento ?? null,
+          comentarioObservacion: r.comentarioObservacion ?? null,
+          comentarioOportunidadMejora: r.comentarioOportunidadMejora ?? null,
           puntajeObtenido: calcularPuntajeRespuesta(info.nodo, r.valor ?? undefined, r.valores),
           puntajeMaximo: info.nodo.puntajeMaximo,
           capturadoEnCliente: r.capturadoEnCliente,
@@ -97,13 +99,33 @@ export class SincronizarCapturaOfflineUseCase {
         valorDespues: {
           valor: resultado.detalle.valor,
           valores: resultado.detalle.valores,
-          comentario: resultado.detalle.comentario,
+          comentarioReconocimiento: resultado.detalle.comentarioReconocimiento,
+          comentarioObservacion: resultado.detalle.comentarioObservacion,
+          comentarioOportunidadMejora: resultado.detalle.comentarioOportunidadMejora,
         },
       });
     }
 
     const sincronizadoEn = new Date();
     await this.repo.marcarSincronizado(id, empresaId, sincronizadoEn, input.capturaOffline);
+
+    // Recalcular y persistir el resumen en la Inspeccion — si no, el listado (que lee estas
+    // columnas directamente) queda en 0/0/0%/— hasta que se firme (ver decisiones.md, 2026-07-24).
+    const detallesActualizados = new Map(certificacion.detalles.map((d) => [d.nodoId, d]));
+    for (const resultado of resultados) {
+      if (resultado.aplicado) detallesActualizados.set(resultado.detalle.nodoId, resultado.detalle);
+    }
+    const resumen = calcularResumen(
+      Array.from(detallesActualizados.values()),
+      certificacion.plantilla.puntajeMaximo,
+      certificacion.plantilla.rangosResultado,
+    );
+    await this.repo.actualizarResumenProgreso(id, {
+      puntajeObtenido: resumen.puntajeObtenido,
+      puntajeMaximo: resumen.puntajeMaximo,
+      porcentajeCumplimiento: resumen.porcentajeCumplimiento,
+      clasificacion: resumen.clasificacion ?? null,
+    });
 
     return {
       procesadas: resultados.length,

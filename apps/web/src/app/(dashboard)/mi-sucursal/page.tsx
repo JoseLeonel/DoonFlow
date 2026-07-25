@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usarHistoricoSucursal } from "../mantenimientos/clientes/_hooks/usar-historico-sucursal";
+import { useHistoricoSucursal } from "../mantenimientos/clientes/_hooks/use-historico-sucursal";
 import { TablaHistoricoCertificaciones } from "../mantenimientos/clientes/_components/tabla-historico-certificaciones";
 import { obtenerSesionActual } from "../../../lib/sesion.servicio";
 import type { SesionActual } from "@doonflow/shared";
@@ -22,7 +22,7 @@ export default function PaginaMiSucursal() {
       .catch(() => setError("No se pudo cargar tu sucursal."));
   }, []);
 
-  const { historico, cargando } = usarHistoricoSucursal(sucursalId ?? "");
+  const { historico, cargando } = useHistoricoSucursal(sucursalId ?? "");
 
   if (error) {
     return (

@@ -4,7 +4,7 @@ import { useRef } from "react";
 import { cn } from "@doonflow/shared";
 import { Boton } from "@doonflow/ui";
 import type { ImportacionLote, ResultadoPrevisualizacion, TipoImportacion } from "../_servicios-compartidos/importacion.servicio";
-import type { EstadoImportacion } from "../_hooks-compartidos/usar-importacion-excel";
+import type { EstadoImportacion } from "../_hooks-compartidos/use-importacion-excel";
 
 const TITULO_POR_TIPO: Record<TipoImportacion, string> = {
   CLIENTE: "Importar clientes desde Excel",

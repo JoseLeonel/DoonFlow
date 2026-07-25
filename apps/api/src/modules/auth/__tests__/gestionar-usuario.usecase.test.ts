@@ -1,16 +1,19 @@
+import bcrypt from "bcryptjs";
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarUsuarioUseCase } from "../application/casos-uso/gestionar-usuario.usecase";
 import {
   AlcanceInvalidoError,
   EmailDuplicadoError,
+  PasswordActualIncorrectaError,
+  PasswordDebilError,
   SucursalRequeridaError,
   UsuarioNoEncontradoError,
 } from "../domain/auth.errors";
 import type { RolRepositoryPort } from "../domain/rol.repository.port";
 import type { UsuarioDetalle, UsuarioRepositoryPort } from "../domain/usuario.repository.port";
 
-function crearRepoMock(): UsuarioRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<UsuarioRepositoryPort> {
   return {
     buscarPorAuthUserId: vi.fn(),
     listar: vi.fn(),
@@ -21,14 +24,16 @@ function crearRepoMock(): UsuarioRepositoryPort & Record<string, Mock> {
     cambiarEstado: vi.fn(),
     obtenerSucursalesAdicionales: vi.fn(),
     reemplazarSucursalesAdicionales: vi.fn(),
-  } as unknown as UsuarioRepositoryPort & Record<string, Mock>;
+    obtenerPasswordHash: vi.fn(),
+    actualizarPasswordHash: vi.fn(),
+  };
 }
 
-function crearRolRepoMock(): RolRepositoryPort & Record<string, Mock> {
+function crearRolRepoMock(): Mocked<RolRepositoryPort> {
   return {
     obtenerPorId: vi.fn(),
     listar: vi.fn(),
-  } as unknown as RolRepositoryPort & Record<string, Mock>;
+  };
 }
 
 function usuarioDetalle(parcial: Partial<UsuarioDetalle> = {}): UsuarioDetalle {
@@ -98,7 +103,7 @@ describe("GestionarUsuarioUseCase", () => {
 
     it("lanza EmailDuplicadoError si buscarPorEmail retorna un usuario", async () => {
       rolRepo.obtenerPorId.mockResolvedValue({ id: "rol-admin", nombre: "administrador" });
-      repo.buscarPorEmail.mockResolvedValue({ id: "existente" });
+      repo.buscarPorEmail.mockResolvedValue({ id: "existente" } as any);
 
       await expect(
         uc.crear("e1", { nombre: "Ana", email: "ana@doonflow.demo", password: "Admin2026!", rolId: "rol-admin" }),
@@ -143,6 +148,53 @@ describe("GestionarUsuarioUseCase", () => {
       repo.cambiarEstado.mockResolvedValue(usuarioDetalle({ activo: true }));
       await uc.activar("u1", "e1");
       expect(repo.cambiarEstado).toHaveBeenCalledWith("u1", "e1", true);
+    });
+  });
+
+  describe("cambiarPassword", () => {
+    it("lanza UsuarioNoEncontradoError si no existe", async () => {
+      repo.obtenerPorId.mockResolvedValue(null);
+      await expect(uc.cambiarPassword("u1", "e1", "Actual2026!", "Nueva2026!")).rejects.toThrow(
+        UsuarioNoEncontradoError,
+      );
+    });
+
+    it("lanza PasswordActualIncorrectaError si no hay hash guardado (sin login local)", async () => {
+      repo.obtenerPorId.mockResolvedValue(usuarioDetalle());
+      repo.obtenerPasswordHash.mockResolvedValue(null);
+
+      await expect(uc.cambiarPassword("u1", "e1", "Actual2026!", "Nueva2026!")).rejects.toThrow(
+        PasswordActualIncorrectaError,
+      );
+    });
+
+    it("lanza PasswordActualIncorrectaError si passwordActual no coincide con el hash", async () => {
+      repo.obtenerPorId.mockResolvedValue(usuarioDetalle());
+      repo.obtenerPasswordHash.mockResolvedValue(await bcrypt.hash("Correcta2026!", 12));
+
+      await expect(uc.cambiarPassword("u1", "e1", "Incorrecta2026!", "Nueva2026!")).rejects.toThrow(
+        PasswordActualIncorrectaError,
+      );
+      expect(repo.actualizarPasswordHash).not.toHaveBeenCalled();
+    });
+
+    it("lanza PasswordDebilError si la nueva contraseña no cumple la política", async () => {
+      repo.obtenerPorId.mockResolvedValue(usuarioDetalle());
+      repo.obtenerPasswordHash.mockResolvedValue(await bcrypt.hash("Actual2026!", 12));
+
+      await expect(uc.cambiarPassword("u1", "e1", "Actual2026!", "debil")).rejects.toThrow(PasswordDebilError);
+      expect(repo.actualizarPasswordHash).not.toHaveBeenCalled();
+    });
+
+    it("actualiza el hash cuando passwordActual coincide y la nueva cumple la política", async () => {
+      repo.obtenerPorId.mockResolvedValue(usuarioDetalle());
+      repo.obtenerPasswordHash.mockResolvedValue(await bcrypt.hash("Actual2026!", 12));
+
+      await uc.cambiarPassword("u1", "e1", "Actual2026!", "Nueva2026!");
+
+      expect(repo.actualizarPasswordHash).toHaveBeenCalledWith("u1", "e1", expect.any(String));
+      const nuevoHash = repo.actualizarPasswordHash.mock.calls[0]![2];
+      expect(await bcrypt.compare("Nueva2026!", nuevoHash)).toBe(true);
     });
   });
 });

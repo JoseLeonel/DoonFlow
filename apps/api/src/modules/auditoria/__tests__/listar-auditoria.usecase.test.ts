@@ -1,10 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { ListarAuditoriaUseCase } from "../application/casos-uso/listar-auditoria.usecase";
 import type { RegistroAuditoriaRepositoryPort } from "../domain/registro-auditoria.repository.port";
 
-function crearRepoMock(): RegistroAuditoriaRepositoryPort & Record<string, Mock> {
-  return { registrar: vi.fn(), listar: vi.fn() } as unknown as RegistroAuditoriaRepositoryPort & Record<string, Mock>;
+function crearRepoMock(): Mocked<RegistroAuditoriaRepositoryPort> {
+  return { registrar: vi.fn(), listar: vi.fn() };
 }
 
 describe("ListarAuditoriaUseCase", () => {

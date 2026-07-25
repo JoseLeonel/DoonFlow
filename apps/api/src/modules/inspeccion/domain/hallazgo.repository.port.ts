@@ -1,4 +1,4 @@
-import type { Hallazgo } from "./hallazgo.entity";
+import type { CategoriaHallazgo, Hallazgo } from "./hallazgo.entity";
 
 export interface HallazgoEvidenciaGuardada {
   id: string;
@@ -18,7 +18,9 @@ export interface DatosCrearHallazgo {
   inspeccionId: string;
   empresaId: string;
   descripcion: string;
-  severidad: string;
+  /** `undefined`/`null` para categorías distintas de NO_CONFORMIDAD. */
+  severidad?: string | null;
+  categoria: CategoriaHallazgo;
   detalleId?: string | null;
 }
 
@@ -31,8 +33,15 @@ export interface HallazgoRepositoryPort {
   /** Lista los hallazgos de una certificación (más antiguos primero). */
   listarPorInspeccion(inspeccionId: string, empresaId: string): Promise<HallazgoConEvidencias[]>;
 
-  /** Lista solo los `detalleId` que ya tienen un hallazgo generado (soporta la idempotencia de `generarAutomaticos`). */
+  /** Lista solo los `detalleId` con hallazgo NO_CONFORMIDAD ya generado (idempotencia de `generarAutomaticos`). */
   listarDetalleIdsConHallazgo(inspeccionId: string): Promise<Set<string>>;
+
+  /**
+   * Lista las claves `detalleId::categoria` (RECONOCIMIENTO/OBSERVACION/OPORTUNIDAD_MEJORA) que ya
+   * tienen un hallazgo generado desde los comentarios de la pregunta — idempotencia de
+   * `sincronizarComentariosCategorizados` (un mismo detalle puede tener hasta 3, uno por categoría).
+   */
+  listarClavesComentarioConHallazgo(inspeccionId: string): Promise<Set<string>>;
 
   /** Crea un hallazgo (manual o automático). */
   crear(datos: DatosCrearHallazgo): Promise<HallazgoConEvidencias>;
@@ -45,6 +54,9 @@ export interface HallazgoRepositoryPort {
 
   /** Edita un hallazgo (ej. severidad sugerida antes de generar el plan). */
   actualizar(id: string, empresaId: string, datos: DatosActualizarHallazgo): Promise<HallazgoConEvidencias>;
+
+  /** 011-aceptacion-apelaciones-certificacion — marca el hallazgo `ANULADO_POR_APELACION` (nunca se borra). */
+  anularPorApelacion(id: string, empresaId: string): Promise<HallazgoConEvidencias>;
 
   /** Adjunta una evidencia ya subida a un hallazgo. */
   agregarEvidencia(

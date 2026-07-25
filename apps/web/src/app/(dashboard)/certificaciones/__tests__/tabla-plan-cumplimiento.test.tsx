@@ -4,7 +4,7 @@ import { TablaPlanCumplimiento } from "../_components/tabla-plan-cumplimiento";
 import type { AccionCorrectiva, Hallazgo } from "@doonflow/shared";
 
 const hallazgos: Hallazgo[] = [
-  { id: "h1", inspeccionId: "c1", descripcion: "Extintor vencido", severidad: "CRITICA", creadoEn: "2026-01-01", evidencias: [] },
+  { id: "h1", inspeccionId: "c1", descripcion: "Extintor vencido", categoria: "NO_CONFORMIDAD", severidad: "CRITICA", estado: "ACTIVO", creadoEn: "2026-01-01", evidencias: [] },
 ];
 
 const acciones: AccionCorrectiva[] = [
@@ -19,6 +19,12 @@ describe("TablaPlanCumplimiento", () => {
   it("con acciones = [] muestra estado vacío", () => {
     render(<TablaPlanCumplimiento hallazgos={[]} acciones={[]} planCerrado={false} onAgregarAccion={vi.fn()} />);
     expect(screen.getByText(/no hay acciones correctivas/i)).toBeInTheDocument();
+  });
+
+  it("con hallazgos pero sin acciones todavía, muestra el botón para agregar la primera acción (no solo el estado vacío)", () => {
+    render(<TablaPlanCumplimiento hallazgos={hallazgos} acciones={[]} planCerrado={false} onAgregarAccion={vi.fn()} />);
+    expect(screen.getByText(/no hay acciones correctivas/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /\+ Acción para "Extintor vencido"/ })).toBeInTheDocument();
   });
 
   it("con acciones renderiza una fila por cada una con hallazgo, responsable, fecha límite, estado, avance y evidencias", () => {

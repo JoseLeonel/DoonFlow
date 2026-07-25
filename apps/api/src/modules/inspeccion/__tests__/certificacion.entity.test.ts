@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   puedeEditarRespuestas,
   puedeFirmarse,
+  puedeEjecutarCertificacion,
   calcularResumen,
   calcularResumenPorSeccion,
   calcularPuntajeRespuesta,
@@ -21,7 +22,7 @@ function nodoPregunta(parcial: Partial<NodoArbol> = {}): NodoArbol {
     nivel: 1,
     activo: true,
     puntajeMaximo: 10,
-    reglaComentario: "NUNCA",
+
     evidenciaObligatoria: false,
     evidenciaMinima: 0,
     evidenciaMaxima: 0,
@@ -34,7 +35,7 @@ function nodoPregunta(parcial: Partial<NodoArbol> = {}): NodoArbol {
 function seccion(id: string, titulo: string, hijos: NodoArbol[]): NodoArbol {
   return {
     id, padreId: null, tipo: "PANEL", codigo: id, titulo, orden: 0, nivel: 0, activo: true,
-    puntajeMaximo: 0, reglaComentario: "NUNCA", evidenciaObligatoria: false,
+    puntajeMaximo: 0, evidenciaObligatoria: false,
     evidenciaMinima: 0, evidenciaMaxima: 0, opciones: [], hijos,
   };
 }
@@ -56,6 +57,24 @@ describe("puedeFirmarse", () => {
 
   it("retorna false cuando la certificación ya está FIRMADA, aunque no haya pendientes", () => {
     expect(puedeFirmarse({ estado: "FIRMADA" }, 0)).toBe(false);
+  });
+});
+
+describe("puedeEjecutarCertificacion", () => {
+  it("retorna false para administrador_cliente", () => {
+    expect(puedeEjecutarCertificacion("administrador_cliente")).toBe(false);
+  });
+
+  it("retorna false para usuario_sucursal", () => {
+    expect(puedeEjecutarCertificacion("usuario_sucursal")).toBe(false);
+  });
+
+  it("retorna true para administrador", () => {
+    expect(puedeEjecutarCertificacion("administrador")).toBe(true);
+  });
+
+  it("retorna true para auditor", () => {
+    expect(puedeEjecutarCertificacion("auditor")).toBe(true);
   });
 });
 

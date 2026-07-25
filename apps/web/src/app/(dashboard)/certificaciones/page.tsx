@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { Paginador } from "@doonflow/ui";
-import { usarCertificaciones } from "./_hooks/usar-certificaciones";
+import { useCertificaciones } from "./_hooks/use-certificaciones";
 import { TablaCertificaciones } from "./_components/tabla-certificaciones";
 
 export default function PaginaCertificaciones() {
-  const { certificaciones, total, pagina, porPagina, cargando, cambiarPagina, cambiarPorPagina } = usarCertificaciones();
+  const { certificaciones, total, pagina, porPagina, cargando, cambiarPagina, cambiarPorPagina } = useCertificaciones();
 
   return (
     <div className="p-6 md:p-7.5">

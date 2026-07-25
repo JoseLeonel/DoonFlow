@@ -1,18 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { usarSucursales } from "../_hooks/usar-sucursales";
+import { useSucursales } from "../_hooks/use-sucursales";
 import { FormularioSucursal } from "./formulario-sucursal";
 import { TablaSucursales } from "./tabla-sucursales";
 import type { Sucursal } from "../_servicios/sucursal.servicio";
-import { usarImportacionExcel } from "../../../_hooks-compartidos/usar-importacion-excel";
+import { useImportacionExcel } from "../../../_hooks-compartidos/use-importacion-excel";
 import { ModalImportarExcel } from "../../../_components-compartidos/modal-importar-excel";
 
 export function SeccionSucursales({ clienteId, soloLectura = false }: { clienteId: string; soloLectura?: boolean }) {
-  const { sucursales, cargando, guardando, error, crear, actualizar, toggleEstado, recargar } = usarSucursales(clienteId);
+  const { sucursales, cargando, guardando, error, crear, actualizar, toggleEstado, recargar } = useSucursales(clienteId);
   const [editando, setEditando] = useState<Sucursal | null | undefined>(undefined);
   const [modalImportarAbierto, setModalImportarAbierto] = useState(false);
-  const importacion = usarImportacionExcel("SUCURSAL");
+  const importacion = useImportacionExcel("SUCURSAL");
 
   function cerrarModalImportar() {
     setModalImportarAbierto(false);

@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarAccionCorrectivaUseCase } from "../application/casos-uso/gestionar-accion-correctiva.usecase";
 import { SinPermisoActualizarAvanceError, SinPermisoVerificacionError } from "../domain/inspeccion.errors";
 import type { AccionCorrectivaRepositoryPort } from "../domain/accion-correctiva.repository.port";
 import type { AlmacenamientoEvidenciasPort } from "../domain/almacenamiento-evidencias.port";
 
-function accionOrigen(parcial: Record<string, unknown> = {}) {
+function accionOrigen(parcial: Record<string, unknown> = {}): any {
   return {
     id: "a1", planCumplimientoId: "plan1", hallazgoId: "h1", descripcion: "Acción",
     responsableId: "u1", responsableNombre: "Juan", fechaLimite: new Date(), estado: "EN_PROCESO",
@@ -16,23 +16,44 @@ function accionOrigen(parcial: Record<string, unknown> = {}) {
   };
 }
 
-function crearRepoMock(): AccionCorrectivaRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<AccionCorrectivaRepositoryPort> {
   return {
     crear: vi.fn(), obtenerPorId: vi.fn(), actualizar: vi.fn(), actualizarAvance: vi.fn(),
     enviarARevision: vi.fn(), verificar: vi.fn(), listarPorPlan: vi.fn(),
     listarPorResponsable: vi.fn(), listarEnRevision: vi.fn(), agregarEvidencia: vi.fn(),
-  } as unknown as AccionCorrectivaRepositoryPort & Record<string, Mock>;
+  };
 }
 
 describe("GestionarAccionCorrectivaUseCase", () => {
   let repo: ReturnType<typeof crearRepoMock>;
-  let almacenamiento: AlmacenamientoEvidenciasPort & Record<string, Mock>;
+  let almacenamiento: Mocked<AlmacenamientoEvidenciasPort>;
   let uc: GestionarAccionCorrectivaUseCase;
 
   beforeEach(() => {
     repo = crearRepoMock();
-    almacenamiento = { subirArchivo: vi.fn() } as unknown as AlmacenamientoEvidenciasPort & Record<string, Mock>;
+    almacenamiento = { subirArchivo: vi.fn() };
     uc = new GestionarAccionCorrectivaUseCase(repo, almacenamiento);
+  });
+
+  describe("crear", () => {
+    it("006-vigencia-notificaciones-portal: notifica ACCION_ASIGNADA al responsable", async () => {
+      repo.crear.mockResolvedValue(accionOrigen({ id: "a1", responsableId: "u1", descripcion: "Sustituir extintor" }));
+      const registrarNotificacion = vi.fn();
+      const ucConNotificacion = new GestionarAccionCorrectivaUseCase(repo, almacenamiento, registrarNotificacion);
+
+      await ucConNotificacion.crear("plan1", "e1", { hallazgoId: "h1", descripcion: "Sustituir extintor", responsableId: "u1", fechaLimite: new Date() });
+
+      expect(registrarNotificacion).toHaveBeenCalledWith(expect.objectContaining({
+        usuarioId: "u1", empresaId: "e1", tipo: "ACCION_ASIGNADA", referenciaTipo: "accion_correctiva", referenciaId: "a1",
+      }));
+    });
+
+    it("sin registrarNotificacion inyectado, no falla", async () => {
+      repo.crear.mockResolvedValue(accionOrigen({ id: "a1" }));
+      await expect(
+        uc.crear("plan1", "e1", { hallazgoId: "h1", descripcion: "x", responsableId: "u1", fechaLimite: new Date() }),
+      ).resolves.toBeDefined();
+    });
   });
 
   describe("actualizarAvance", () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarSucursalUseCase } from "../application/casos-uso/gestionar-sucursal.usecase";
 import { ClienteNoEncontradoError, CorreoInvalidoError, SucursalNoEncontradaError } from "../domain/sucursal.errors";
 import type { SucursalRepositoryPort } from "../domain/sucursal.repository.port";
@@ -7,7 +7,7 @@ import type { ClienteRepositoryPort } from "../../clientes/domain/cliente.reposi
 import type { Sucursal } from "../domain/sucursal.entity";
 import type { Cliente } from "../../clientes/domain/cliente.entity";
 
-function crearRepoMock(): SucursalRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<SucursalRepositoryPort> {
   return {
     listarPorCliente: vi.fn(),
     obtenerPorId: vi.fn(),
@@ -16,10 +16,10 @@ function crearRepoMock(): SucursalRepositoryPort & Record<string, Mock> {
     cambiarEstado: vi.fn(),
     obtenerHistoricoCertificaciones: vi.fn(),
     obtenerPuntajeVigente: vi.fn(),
-  } as unknown as SucursalRepositoryPort & Record<string, Mock>;
+  };
 }
 
-function crearClienteRepoMock(): ClienteRepositoryPort & Record<string, Mock> {
+function crearClienteRepoMock(): Mocked<ClienteRepositoryPort> {
   return {
     listar: vi.fn(),
     obtenerPorId: vi.fn(),
@@ -27,7 +27,8 @@ function crearClienteRepoMock(): ClienteRepositoryPort & Record<string, Mock> {
     actualizar: vi.fn(),
     cambiarEstado: vi.fn(),
     existeIdentificacion: vi.fn(),
-  } as unknown as ClienteRepositoryPort & Record<string, Mock>;
+    buscarPorIdentificacion: vi.fn(),
+  };
 }
 
 function sucursal(parcial: Partial<Sucursal> = {}): Sucursal {
@@ -73,14 +74,14 @@ describe("GestionarSucursalUseCase", () => {
       clienteRepo.obtenerPorId.mockResolvedValue(cliente());
       repo.crear.mockResolvedValue(sucursal());
 
-      await uc.crear("e1", { nombre: "Planta Central", clienteId: "c1" });
+      await uc.crear("e1", { nombre: "Planta Central", clienteId: "c1" } as any);
 
       expect(repo.crear).toHaveBeenCalledWith({ nombre: "Planta Central", clienteId: "c1", empresaId: "e1" });
     });
 
     it("lanza CorreoInvalidoError si el correo tiene formato inválido", async () => {
       await expect(
-        uc.crear("e1", { nombre: "Planta Central", clienteId: "c1", correo: "invalido" }),
+        uc.crear("e1", { nombre: "Planta Central", clienteId: "c1", correo: "invalido" } as any),
       ).rejects.toThrow(CorreoInvalidoError);
       expect(clienteRepo.obtenerPorId).not.toHaveBeenCalled();
     });
@@ -89,7 +90,7 @@ describe("GestionarSucursalUseCase", () => {
       clienteRepo.obtenerPorId.mockResolvedValue(null);
 
       await expect(
-        uc.crear("e1", { nombre: "Planta Central", clienteId: "c-inexistente" }),
+        uc.crear("e1", { nombre: "Planta Central", clienteId: "c-inexistente" } as any),
       ).rejects.toThrow(ClienteNoEncontradoError);
     });
   });

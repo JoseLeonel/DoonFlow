@@ -9,6 +9,7 @@ export function crearReportesRouter(ctrl: ReporteController, autenticar: Request
 
   r.post("/", ctrl.generar);
   r.get("/", ctrl.listarHistorial);
+  r.get("/panel-ejecutivo", ctrl.panelEjecutivo);
   r.get("/consolidado-cliente/preview", ctrl.previewConsolidado);
   r.get("/comparativo-sucursales/preview", ctrl.previewComparativo);
   r.get("/:id/descargar", ctrl.descargar);

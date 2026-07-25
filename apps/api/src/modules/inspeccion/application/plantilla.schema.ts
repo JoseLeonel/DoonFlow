@@ -24,7 +24,6 @@ export const crearNodoSchema = z.object({
   tipoRespuesta:    z.enum(["SI_NO","SELECCION_UNICA","SELECCION_MULTIPLE","TEXTO_LIBRE","NUMERICO","PUNTAJE_MANUAL"]).optional(),
   modalidadPuntaje: z.enum(["FIJO","PARCIAL","MANUAL","POR_OPCIONES"]).optional(),
   puntajeMaximo:    z.number().min(0).default(0),
-  reglaComentario:  z.enum(["NUNCA","SIEMPRE","CUANDO_NEGATIVO","CUANDO_PUNTAJE_MENOR_MAXIMO","CONFIGURABLE"]).default("NUNCA"),
   evidenciaObligatoria: z.boolean().default(false),
   evidenciaMinima: z.number().int().min(0).default(0),
   evidenciaMaxima: z.number().int().min(0).default(5),

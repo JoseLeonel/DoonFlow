@@ -1,6 +1,6 @@
-import type { Hallazgo, Severidad } from "@doonflow/shared";
+import type { CategoriaHallazgo, Hallazgo, Severidad } from "@doonflow/shared";
 
-export type { Hallazgo, Severidad };
+export type { CategoriaHallazgo, Hallazgo, Severidad };
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`/api/inspeccion${path}`, {
@@ -18,7 +18,9 @@ export function listarHallazgos(certificacionId: string): Promise<Hallazgo[]> {
 
 export interface DatosCrearHallazgo {
   descripcion: string;
-  severidad: Severidad;
+  categoria: CategoriaHallazgo;
+  /** Requerida solo cuando `categoria === "NO_CONFORMIDAD"`. */
+  severidad?: Severidad;
   detalleId?: string | null;
 }
 
@@ -31,6 +33,11 @@ export function crearHallazgo(certificacionId: string, datos: DatosCrearHallazgo
 
 export function generarHallazgosAutomaticos(certificacionId: string): Promise<Hallazgo[]> {
   return apiFetch<Hallazgo[]>(`/certificaciones/${certificacionId}/hallazgos/generar-automaticos`, { method: "POST" });
+}
+
+/** 2026-07-25 — genera reconocimientos/observaciones/oportunidades de mejora desde los 3 comentarios de cada pregunta. */
+export function generarHallazgosDesdeComentarios(certificacionId: string): Promise<Hallazgo[]> {
+  return apiFetch<Hallazgo[]>(`/certificaciones/${certificacionId}/hallazgos/generar-comentarios`, { method: "POST" });
 }
 
 export function actualizarHallazgo(hallazgoId: string, datos: Partial<DatosCrearHallazgo>): Promise<Hallazgo> {

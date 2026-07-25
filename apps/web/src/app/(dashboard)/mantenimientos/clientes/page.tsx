@@ -4,14 +4,14 @@ import Link from "next/link";
 import { useState } from "react";
 import { Paginador } from "@doonflow/ui";
 import { TablaClientes } from "./_components/tabla-clientes";
-import { usarClientes } from "./_hooks/usar-clientes";
-import { usarImportacionExcel } from "../../_hooks-compartidos/usar-importacion-excel";
+import { useClientes } from "./_hooks/use-clientes";
+import { useImportacionExcel } from "../../_hooks-compartidos/use-importacion-excel";
 import { ModalImportarExcel } from "../../_components-compartidos/modal-importar-excel";
 
 export default function PaginaClientes() {
-  const { clientes, total, pagina, porPagina, cargando, error, recargar, cambiarPagina, cambiarPorPagina } = usarClientes();
+  const { clientes, total, pagina, porPagina, cargando, error, recargar, cambiarPagina, cambiarPorPagina } = useClientes();
   const [modalImportarAbierto, setModalImportarAbierto] = useState(false);
-  const importacion = usarImportacionExcel("CLIENTE");
+  const importacion = useImportacionExcel("CLIENTE");
 
   function cerrarModalImportar() {
     setModalImportarAbierto(false);

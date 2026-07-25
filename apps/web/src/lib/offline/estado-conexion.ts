@@ -13,7 +13,7 @@ const INTERVALO_VERIFICACION_MS = 15000;
  * propio origin, sin necesitar un endpoint nuevo ni autenticación) con timeout corto, en vez
  * de confiar únicamente en el evento del navegador.
  */
-export function usarEstadoConexion(): EstadoConexion {
+export function useEstadoConexion(): EstadoConexion {
   const [estado, setEstado] = useState<EstadoConexion>(() =>
     typeof navigator === "undefined" || navigator.onLine ? "online" : "offline",
   );

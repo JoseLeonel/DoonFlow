@@ -1,6 +1,11 @@
 "use client";
 
-import { usarContextoSidebar } from "./sidebar-contexto";
+import { useEffect, useState } from "react";
+import { CampanaNotificaciones } from "@doonflow/ui";
+import { useContextoSidebar } from "./sidebar-contexto";
+import { useNotificaciones } from "../notificaciones/_hooks/use-notificaciones";
+import { ListaNotificaciones } from "../notificaciones/_components/lista-notificaciones";
+import { obtenerSesionActual } from "../../../lib/sesion.servicio";
 
 function IconoHamburguesa({ className }: { className?: string }) {
   return (
@@ -11,7 +16,15 @@ function IconoHamburguesa({ className }: { className?: string }) {
 }
 
 export function Header() {
-  const { toggleSidebar } = usarContextoSidebar();
+  const { toggleSidebar } = useContextoSidebar();
+  const { notificaciones, noLeidas, abierto, toggle, marcarLeida, marcarTodasLeidas } = useNotificaciones();
+  const [email, setEmail] = useState<string | null>(null);
+
+  useEffect(() => {
+    obtenerSesionActual().then((sesion) => setEmail(sesion.usuario.email)).catch(() => {});
+  }, []);
+
+  const inicial = email ? email[0]!.toUpperCase() : "?";
 
   return (
     <header className="sticky top-0 z-30 flex h-[60px] items-center gap-4 border-b border-stroke bg-white px-4 md:px-6 dark:border-dark-3 dark:bg-gray-dark">
@@ -25,11 +38,15 @@ export function Header() {
 
       <div className="flex-1" />
 
+      <CampanaNotificaciones contador={noLeidas} abierto={abierto} onToggle={toggle}>
+        <ListaNotificaciones notificaciones={notificaciones} onMarcarLeida={marcarLeida} onMarcarTodasLeidas={marcarTodasLeidas} />
+      </CampanaNotificaciones>
+
       <div className="flex items-center gap-2 text-sm text-dark-4 dark:text-dark-6">
         <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-bold text-primary">
-          A
+          {inicial}
         </div>
-        <span className="hidden sm:inline">admin@doonflow.demo</span>
+        <span className="hidden sm:inline">{email ?? "…"}</span>
       </div>
     </header>
   );

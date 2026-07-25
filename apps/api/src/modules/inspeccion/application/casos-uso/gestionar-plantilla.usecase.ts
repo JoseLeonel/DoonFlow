@@ -37,7 +37,7 @@ export class GestionarPlantillaUseCase {
   async crear(empresaId: string, usuarioId: string, input: CrearPlantillaInput) {
     return this.repo.crear({
       empresaId, nombre: input.nombre, descripcion: input.descripcion,
-      tipo: input.tipo, activa: true, puntajeMaximo: input.puntajeMaximo,
+      tipo: input.tipo, activa: true, estadoAprobacion: "BORRADOR", puntajeMaximo: input.puntajeMaximo,
       fechaVigencia: input.fechaVigencia ? new Date(input.fechaVigencia) : undefined,
       observaciones: input.observaciones, creadoPorId: usuarioId,
     });

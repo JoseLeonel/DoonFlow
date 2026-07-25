@@ -33,4 +33,28 @@ describe("IndicadorProgresoWizard", () => {
     await userEvent.click(screen.getByTestId("paso-3"));
     expect(onIrAPaso).not.toHaveBeenCalled();
   });
+
+  it("un paso completo (y no actual) muestra el check ADEMÁS del número, sin ocultarlo", () => {
+    render(<IndicadorProgresoWizard pasos={pasos} pasoActual={2} onIrAPaso={vi.fn()} />);
+
+    expect(screen.getByTestId("paso-1").querySelector("svg")).toBeInTheDocument();
+    expect(screen.getByTestId("paso-1")).toHaveTextContent("1");
+  });
+
+  it("un paso incompleto muestra su número, no un check", () => {
+    render(<IndicadorProgresoWizard pasos={pasos} pasoActual={1} onIrAPaso={vi.fn()} />);
+
+    expect(screen.getByTestId("paso-2").querySelector("svg")).not.toBeInTheDocument();
+    expect(screen.getByTestId("paso-2")).toHaveTextContent("2");
+  });
+
+  it("el paso actual muestra su número aunque ya esté completo", () => {
+    const pasosConActualCompleto: PasoIndicador[] = [
+      { numero: 1, titulo: "Sección 1", visitado: true, completo: true },
+    ];
+    render(<IndicadorProgresoWizard pasos={pasosConActualCompleto} pasoActual={1} onIrAPaso={vi.fn()} />);
+
+    expect(screen.getByTestId("paso-1").querySelector("svg")).not.toBeInTheDocument();
+    expect(screen.getByTestId("paso-1")).toHaveTextContent("1");
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mock, Mocked } from "vitest";
 import { ImportarSucursalesUseCase } from "../application/casos-uso/importar-sucursales.usecase";
 import type { GestionarSucursalUseCase } from "../../sucursales/application/casos-uso/gestionar-sucursal.usecase";
 import type { ClienteRepositoryPort } from "../../clientes/domain/cliente.repository.port";
@@ -7,8 +7,8 @@ import type { ImportacionLoteRepositoryPort } from "../domain/importacion-lote.r
 
 describe("ImportarSucursalesUseCase", () => {
   let sucursalUseCase: { crear: Mock };
-  let clienteRepo: ClienteRepositoryPort & Record<string, Mock>;
-  let loteRepo: ImportacionLoteRepositoryPort & Record<string, Mock>;
+  let clienteRepo: Mocked<ClienteRepositoryPort>;
+  let loteRepo: Mocked<ImportacionLoteRepositoryPort>;
   let uc: ImportarSucursalesUseCase;
 
   beforeEach(() => {
@@ -16,12 +16,12 @@ describe("ImportarSucursalesUseCase", () => {
     clienteRepo = {
       listar: vi.fn(), obtenerPorId: vi.fn(), crear: vi.fn(), actualizar: vi.fn(),
       cambiarEstado: vi.fn(), existeIdentificacion: vi.fn(),
-      buscarPorIdentificacion: vi.fn().mockResolvedValue({ id: "c1", empresa: "Empresa X" }),
-    } as unknown as ClienteRepositoryPort & Record<string, Mock>;
+      buscarPorIdentificacion: vi.fn().mockResolvedValue({ id: "c1", empresa: "Empresa X" } as any),
+    };
     loteRepo = {
       crear: vi.fn().mockImplementation((empresaId, usuarioId, datos) => Promise.resolve({ id: "lote1", empresaId, creadoPorId: usuarioId, ...datos })),
       listar: vi.fn(), obtenerPorId: vi.fn(),
-    } as unknown as ImportacionLoteRepositoryPort & Record<string, Mock>;
+    } as unknown as Mocked<ImportacionLoteRepositoryPort>;
 
     uc = new ImportarSucursalesUseCase(loteRepo, sucursalUseCase as unknown as GestionarSucursalUseCase, clienteRepo);
   });

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { RegistroAuditoria } from "../_servicios/auditoria.servicio";
-import type { FiltrosAuditoriaUI } from "../_hooks/usar-auditoria";
+import type { FiltrosAuditoriaUI } from "../_hooks/use-auditoria";
 
 const ACCIONES_CONOCIDAS = [
   "LOGIN",

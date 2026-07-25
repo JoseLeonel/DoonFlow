@@ -8,3 +8,7 @@ export { Paginador } from "./paginador";
 export type { PropsPaginador } from "./paginador";
 export { TablaComparativa } from "./tabla-comparativa";
 export type { ColumnaComparativa, FilaComparativa, PropsTablaComparativa } from "./tabla-comparativa";
+export { CampanaNotificaciones } from "./campana-notificaciones";
+export type { PropsCampanaNotificaciones } from "./campana-notificaciones";
+export { TarjetaKpi } from "./tarjeta-kpi";
+export type { PropsTarjetaKpi } from "./tarjeta-kpi";

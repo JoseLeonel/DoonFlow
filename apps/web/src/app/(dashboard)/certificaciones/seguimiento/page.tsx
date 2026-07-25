@@ -2,11 +2,12 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usarSeguimiento } from "../_hooks/usar-seguimiento";
+import { formatearFechaCalendario } from "@doonflow/shared";
+import { useSeguimiento } from "../_hooks/use-seguimiento";
 import { BadgeEstadoAccion } from "../_components/badge-estado-accion";
 
 export default function PaginaSeguimientoCertificacion() {
-  const { acciones, cargando, error, actualizarAvance, adjuntarEvidencia, enviarARevision } = usarSeguimiento();
+  const { acciones, cargando, error, actualizarAvance, adjuntarEvidencia, enviarARevision } = useSeguimiento();
   const [seleccionada, setSeleccionada] = useState<string | null>(null);
 
   const pendientes = acciones.filter((a) => a.estado !== "CUMPLIDO" && a.estado !== "EN_REVISION");
@@ -40,7 +41,7 @@ export default function PaginaSeguimientoCertificacion() {
                     <div>
                       <p className="text-sm font-medium text-dark dark:text-white">{a.descripcion}</p>
                       <p className="text-body-xs text-dark-4 dark:text-dark-6">
-                        Vence: {new Date(a.fechaLimite).toLocaleDateString("es-CR")} · Avance: {a.porcentajeAvance}%
+                        Vence: {formatearFechaCalendario(a.fechaLimite)} · Avance: {a.porcentajeAvance}%
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -80,7 +81,7 @@ function DetalleAccionSeguimiento({
   onAdjuntarEvidencia,
   onEnviarARevision,
 }: {
-  accion: ReturnType<typeof usarSeguimiento>["acciones"][number];
+  accion: ReturnType<typeof useSeguimiento>["acciones"][number];
   onActualizarAvance: (porcentaje: number) => Promise<unknown>;
   onAdjuntarEvidencia: (archivo: File, comentario?: string) => Promise<unknown>;
   onEnviarARevision: () => Promise<unknown>;

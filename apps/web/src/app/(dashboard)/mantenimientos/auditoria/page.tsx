@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { Paginador } from "@doonflow/ui";
-import { usarAuditoria } from "./_hooks/usar-auditoria";
+import { useAuditoria } from "./_hooks/use-auditoria";
 import { TablaAuditoria } from "./_components/tabla-auditoria";
 
 export default function PaginaAuditoria() {
-  const { registros, total, pagina, porPagina, filtros, cargando, error, aplicarFiltros, cambiarPagina, cambiarPorPagina } = usarAuditoria();
+  const { registros, total, pagina, porPagina, filtros, cargando, error, aplicarFiltros, cambiarPagina, cambiarPorPagina } = useAuditoria();
 
   return (
     <div className="p-6 md:p-7.5">

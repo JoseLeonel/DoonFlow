@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usarAprobaciones } from "./_hooks/usar-aprobaciones";
+import { useAprobaciones } from "./_hooks/use-aprobaciones";
 import { TablaAprobaciones } from "./_components/tabla-aprobaciones";
 
 export default function PaginaAprobacionesPendientes() {
-  const { pendientes, cargando, procesandoId, error, aprobar, rechazar } = usarAprobaciones();
+  const { pendientes, cargando, procesandoId, error, aprobar, rechazar } = useAprobaciones();
 
   return (
     <div className="p-6 md:p-7.5">

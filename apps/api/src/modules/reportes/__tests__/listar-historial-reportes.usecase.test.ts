@@ -1,17 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { ListarHistorialReportesUseCase } from "../application/casos-uso/listar-historial-reportes.usecase";
 import { AccesoModuloReportesDenegadoError, ReporteNoEncontradoError } from "../domain/reporte.errors";
 import type { ReporteRepositoryPort } from "../domain/reporte.repository.port";
 
-function crearRepoMock(): ReporteRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<ReporteRepositoryPort> {
   return {
     listarHistorial: vi.fn(),
     crear: vi.fn(),
     obtenerPorId: vi.fn(),
     obtenerDatosConsolidadoCliente: vi.fn(),
     obtenerDatosComparativoSucursales: vi.fn(),
-  } as unknown as ReporteRepositoryPort & Record<string, Mock>;
+    obtenerPanelEjecutivo: vi.fn(),
+  };
 }
 
 describe("ListarHistorialReportesUseCase", () => {

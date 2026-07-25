@@ -2,11 +2,9 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { cn } from "@doonflow/shared";
-import type { NodoArbol, NodoOpcion, TipoNodo, TipoRespuesta, ModalidadPuntaje, ReglaComentario } from "@doonflow/shared";
+import type { NodoArbol, NodoOpcion, TipoNodo, TipoRespuesta, ModalidadPuntaje } from "@doonflow/shared";
 import { Boton } from "@doonflow/ui";
 import type { DatosCrearNodo } from "../_servicios/inspeccion.servicio";
-
-const MAX_NOTA = 500;
 
 const OPCIONES_TIPO_RESPUESTA: { value: TipoRespuesta; label: string }[] = [
   { value: "SI_NO",              label: "Sí / No" },
@@ -22,13 +20,6 @@ const OPCIONES_MODALIDAD: { value: ModalidadPuntaje; label: string }[] = [
   { value: "PARCIAL",     label: "Parcial" },
   { value: "MANUAL",      label: "Manual" },
   { value: "POR_OPCIONES", label: "Por opciones" },
-];
-
-// Condición de la nota cuando está habilitada
-const OPCIONES_CONDICION_NOTA: { value: ReglaComentario; label: string }[] = [
-  { value: "SIEMPRE",                    label: "Siempre" },
-  { value: "CUANDO_NEGATIVO",            label: "Cuando la respuesta es No" },
-  { value: "CUANDO_PUNTAJE_MENOR_MAXIMO", label: "Cuando el puntaje < máximo" },
 ];
 
 interface PropsPanelEdicionNodo {
@@ -63,14 +54,6 @@ export function PanelEdicionNodo({
   const [modalidadPuntaje, setModalidadPuntaje] = useState<ModalidadPuntaje>(nodo.modalidadPuntaje ?? "FIJO");
   const [puntajeMaximo, setPuntajeMaximo]       = useState(nodo.puntajeMaximo);
 
-  // Nota simplificada
-  const reglaNota = nodo.reglaComentario ?? "NUNCA";
-  const [notaHabilitada, setNotaHabilitada]   = useState(reglaNota !== "NUNCA");
-  const [condicionNota, setCondicionNota]     = useState<ReglaComentario>(
-    reglaNota === "NUNCA" ? "SIEMPRE" : reglaNota,
-  );
-  const [previewNota, setPreviewNota]         = useState("");
-
   // Evidencia
   const [evidenciaObligatoria, setEvidenciaObligatoria] = useState(nodo.evidenciaObligatoria);
   const [evidenciaMinima, setEvidenciaMinima]           = useState(nodo.evidenciaMinima);
@@ -90,10 +73,6 @@ export function PanelEdicionNodo({
     setTipoRespuesta(nodo.tipoRespuesta ?? "SI_NO");
     setModalidadPuntaje(nodo.modalidadPuntaje ?? "FIJO");
     setPuntajeMaximo(nodo.puntajeMaximo);
-    const regla = nodo.reglaComentario ?? "NUNCA";
-    setNotaHabilitada(regla !== "NUNCA");
-    setCondicionNota(regla === "NUNCA" ? "SIEMPRE" : regla);
-    setPreviewNota("");
     setEvidenciaObligatoria(nodo.evidenciaObligatoria);
     setEvidenciaMinima(nodo.evidenciaMinima);
     setEvidenciaMaxima(nodo.evidenciaMaxima);
@@ -123,7 +102,6 @@ export function PanelEdicionNodo({
         tipoRespuesta,
         modalidadPuntaje,
         puntajeMaximo,
-        reglaComentario: notaHabilitada ? condicionNota : "NUNCA",
         evidenciaObligatoria,
         evidenciaMinima: evidenciaObligatoria ? evidenciaMinima : 0,
         evidenciaMaxima: evidenciaObligatoria ? evidenciaMaxima : 5,
@@ -282,73 +260,6 @@ export function PanelEdicionNodo({
                       opciones={opciones}
                       onChange={(ops) => cambio(() => setOpciones(ops))}
                     />
-                  </>
-                )}
-
-                {/* ── Nota / Comentario ─────────────────────────── */}
-                <hr className="border-stroke dark:border-dark-3" />
-                <p className="text-body-xs font-semibold uppercase tracking-wide text-dark-4 dark:text-dark-6">
-                  Nota / Comentario del inspector
-                </p>
-
-                <div className="flex items-center gap-3">
-                  <input
-                    type="checkbox"
-                    id="nota-habilitada"
-                    checked={notaHabilitada}
-                    onChange={(e) => cambio(() => setNotaHabilitada(e.target.checked))}
-                    className="h-4 w-4 accent-primary"
-                  />
-                  <label htmlFor="nota-habilitada" className="text-body-sm font-medium text-dark dark:text-white">
-                    Campo de nota habilitado
-                  </label>
-                </div>
-
-                {notaHabilitada && (
-                  <>
-                    <Campo label="Nota requerida cuando…">
-                      <select
-                        value={condicionNota}
-                        onChange={(e) => cambio(() => setCondicionNota(e.target.value as ReglaComentario))}
-                        className={inputCls}
-                      >
-                        {OPCIONES_CONDICION_NOTA.map((o) => (
-                          <option key={o.value} value={o.value}>{o.label}</option>
-                        ))}
-                      </select>
-                    </Campo>
-
-                    {/* Vista previa del campo de nota */}
-                    <div>
-                      <label className="mb-1.5 flex items-center justify-between text-body-xs font-medium text-dark-4 dark:text-dark-6">
-                        <span>Vista previa del campo de nota</span>
-                        <span
-                          className={cn(
-                            "tabular-nums",
-                            previewNota.length >= MAX_NOTA ? "text-red" : "text-dark-5 dark:text-dark-6",
-                          )}
-                        >
-                          {previewNota.length} / {MAX_NOTA}
-                        </span>
-                      </label>
-                      <textarea
-                        value={previewNota}
-                        onChange={(e) => {
-                          if (e.target.value.length <= MAX_NOTA) setPreviewNota(e.target.value);
-                        }}
-                        rows={3}
-                        maxLength={MAX_NOTA}
-                        placeholder="El inspector podrá escribir aquí su comentario…"
-                        className={cn(
-                          inputCls,
-                          "resize-none",
-                          previewNota.length >= MAX_NOTA && "border-red focus:border-red",
-                        )}
-                      />
-                      <p className="mt-1 text-body-xs text-dark-5 dark:text-dark-6">
-                        Campo de solo referencia — muestra cómo verá el inspector la nota.
-                      </p>
-                    </div>
                   </>
                 )}
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarPlanCumplimientoUseCase } from "../application/casos-uso/gestionar-plan-cumplimiento.usecase";
 import {
   PlanCumplimientoConHallazgosSinAccionError,
@@ -13,13 +13,16 @@ import type { AccionCorrectivaRepositoryPort } from "../domain/accion-correctiva
 import type { CertificacionRepositoryPort } from "../domain/certificacion.repository.port";
 
 function crearMocks() {
-  const planRepo = {
+  const planRepo: Mocked<PlanCumplimientoRepositoryPort> = {
     obtenerPorInspeccion: vi.fn(), obtenerPorId: vi.fn(), crear: vi.fn(),
     cerrar: vi.fn(), reabrir: vi.fn(), obtenerIndicadores: vi.fn(),
-  } as unknown as PlanCumplimientoRepositoryPort & Record<string, Mock>;
-  const hallazgoRepo = { listarPorInspeccion: vi.fn() } as unknown as HallazgoRepositoryPort & Record<string, Mock>;
-  const accionRepo = { listarPorPlan: vi.fn() } as unknown as AccionCorrectivaRepositoryPort & Record<string, Mock>;
-  const certificacionRepo = { obtenerCompleta: vi.fn() } as unknown as CertificacionRepositoryPort & Record<string, Mock>;
+  };
+  const hallazgoRepo = {
+    listarPorInspeccion: vi.fn(), listarDetalleIdsConHallazgo: vi.fn(), crear: vi.fn(), crearVarios: vi.fn(),
+    obtenerPorId: vi.fn(), actualizar: vi.fn(), agregarEvidencia: vi.fn(), anularPorApelacion: vi.fn(),
+  } as unknown as Mocked<HallazgoRepositoryPort>;
+  const accionRepo = { listarPorPlan: vi.fn() } as unknown as Mocked<AccionCorrectivaRepositoryPort>;
+  const certificacionRepo = { obtenerCompleta: vi.fn() } as unknown as Mocked<CertificacionRepositoryPort>;
   return { planRepo, hallazgoRepo, accionRepo, certificacionRepo };
 }
 
@@ -29,7 +32,7 @@ describe("GestionarPlanCumplimientoUseCase", () => {
 
   beforeEach(() => {
     mocks = crearMocks();
-    mocks.certificacionRepo.obtenerCompleta.mockResolvedValue({ id: "cert1" });
+    mocks.certificacionRepo.obtenerCompleta.mockResolvedValue({ id: "cert1" } as any);
     uc = new GestionarPlanCumplimientoUseCase(mocks.planRepo, mocks.hallazgoRepo, mocks.accionRepo, mocks.certificacionRepo);
   });
 
@@ -43,7 +46,7 @@ describe("GestionarPlanCumplimientoUseCase", () => {
     });
 
     it("con un plan ya existente para la inspección lanza PlanCumplimientoYaExisteError", async () => {
-      mocks.planRepo.obtenerPorInspeccion.mockResolvedValue({ id: "plan1" });
+      mocks.planRepo.obtenerPorInspeccion.mockResolvedValue({ id: "plan1" } as any);
 
       await expect(uc.generar("cert1", "e1")).rejects.toThrow(PlanCumplimientoYaExisteError);
       expect(mocks.planRepo.crear).not.toHaveBeenCalled();
@@ -51,8 +54,8 @@ describe("GestionarPlanCumplimientoUseCase", () => {
 
     it("con al menos un hallazgo crea el plan", async () => {
       mocks.planRepo.obtenerPorInspeccion.mockResolvedValue(null);
-      mocks.hallazgoRepo.listarPorInspeccion.mockResolvedValue([{ id: "h1" }]);
-      mocks.planRepo.crear.mockResolvedValue({ id: "plan1", estado: "EN_SEGUIMIENTO" });
+      mocks.hallazgoRepo.listarPorInspeccion.mockResolvedValue([{ id: "h1" }] as any);
+      mocks.planRepo.crear.mockResolvedValue({ id: "plan1", estado: "EN_SEGUIMIENTO" } as any);
 
       const plan = await uc.generar("cert1", "e1");
 
@@ -68,9 +71,9 @@ describe("GestionarPlanCumplimientoUseCase", () => {
     });
 
     it("con hallazgos sin cubrir lanza PlanCumplimientoConHallazgosSinAccionError", async () => {
-      mocks.planRepo.obtenerPorId.mockResolvedValue({ id: "plan1", inspeccionId: "cert1" });
-      mocks.hallazgoRepo.listarPorInspeccion.mockResolvedValue([{ id: "h1" }]);
-      mocks.accionRepo.listarPorPlan.mockResolvedValue([{ hallazgoId: "h1", estado: "EN_PROCESO" }]);
+      mocks.planRepo.obtenerPorId.mockResolvedValue({ id: "plan1", inspeccionId: "cert1" } as any);
+      mocks.hallazgoRepo.listarPorInspeccion.mockResolvedValue([{ id: "h1" }] as any);
+      mocks.accionRepo.listarPorPlan.mockResolvedValue([{ hallazgoId: "h1", estado: "EN_PROCESO" }] as any);
 
       await expect(uc.cerrar("plan1", "e1", { id: "auditor1", rol: "auditor" })).rejects.toThrow(
         PlanCumplimientoConHallazgosSinAccionError,
@@ -79,10 +82,10 @@ describe("GestionarPlanCumplimientoUseCase", () => {
     });
 
     it("con todos los hallazgos cubiertos cierra el plan", async () => {
-      mocks.planRepo.obtenerPorId.mockResolvedValue({ id: "plan1", inspeccionId: "cert1" });
-      mocks.hallazgoRepo.listarPorInspeccion.mockResolvedValue([{ id: "h1" }]);
-      mocks.accionRepo.listarPorPlan.mockResolvedValue([{ hallazgoId: "h1", estado: "CUMPLIDO" }]);
-      mocks.planRepo.cerrar.mockResolvedValue({ id: "plan1", estado: "CERRADO" });
+      mocks.planRepo.obtenerPorId.mockResolvedValue({ id: "plan1", inspeccionId: "cert1" } as any);
+      mocks.hallazgoRepo.listarPorInspeccion.mockResolvedValue([{ id: "h1" }] as any);
+      mocks.accionRepo.listarPorPlan.mockResolvedValue([{ hallazgoId: "h1", estado: "CUMPLIDO" }] as any);
+      mocks.planRepo.cerrar.mockResolvedValue({ id: "plan1", estado: "CERRADO" } as any);
 
       const plan = await uc.cerrar("plan1", "e1", { id: "auditor1", rol: "auditor" });
 

@@ -1,5 +1,5 @@
 import { cn } from "@doonflow/shared";
-import type { EstadoSincronizacion } from "../_hooks/usar-captura-offline";
+import type { EstadoSincronizacion } from "../_hooks/use-captura-offline";
 
 interface PropsBannerEstadoConexion {
   estado: EstadoSincronizacion;

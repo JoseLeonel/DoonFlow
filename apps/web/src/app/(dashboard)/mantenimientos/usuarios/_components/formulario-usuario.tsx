@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ROL_ADMINISTRADOR_CLIENTE, ROL_USUARIO_SUCURSAL } from "@doonflow/shared";
-import { usarFormularioUsuario } from "../_hooks/usar-formulario-usuario";
+import { useFormularioUsuario } from "../_hooks/use-formulario-usuario";
 import { obtenerSucursal } from "../../clientes/_servicios/sucursal.servicio";
 import type { Cliente } from "../../clientes/_servicios/cliente.servicio";
 import type { DatosGuardarUsuario, RolCatalogo } from "../_servicios/usuario.servicio";
@@ -69,7 +69,7 @@ export function FormularioUsuario({
     seleccionarClienteFiltro,
     setSucursalId,
     setSucursalesAdicionalesIds,
-  } = usarFormularioUsuario();
+  } = useFormularioUsuario();
 
   // Precarga en modo editar
   useEffect(() => {

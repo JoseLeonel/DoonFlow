@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usarPoliticaRetencion } from "./_hooks/usar-politica-retencion";
+import { usePoliticaRetencion } from "./_hooks/use-politica-retencion";
 import { FormularioRetencion } from "./_components/formulario-retencion";
 
 export default function PaginaPoliticaRetencion() {
-  const { politicas, cambios, cargando, guardando, error, hayCambiosPendientes, editar, guardarCambios } = usarPoliticaRetencion();
+  const { politicas, cambios, cargando, guardando, error, hayCambiosPendientes, editar, guardarCambios } = usePoliticaRetencion();
 
   return (
     <div className="p-6 md:p-7.5">

@@ -11,9 +11,9 @@ type ContextoSidebar = {
 
 const ContextoSidebarCtx = createContext<ContextoSidebar | null>(null);
 
-export function usarContextoSidebar() {
+export function useContextoSidebar() {
   const ctx = useContext(ContextoSidebarCtx);
-  if (!ctx) throw new Error("usarContextoSidebar debe usarse dentro de ProveedorSidebar");
+  if (!ctx) throw new Error("useContextoSidebar debe usarse dentro de ProveedorSidebar");
   return ctx;
 }
 

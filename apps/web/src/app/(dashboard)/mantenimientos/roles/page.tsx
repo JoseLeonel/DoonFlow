@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { usarMatrizPermisos } from "./_hooks/usar-matriz-permisos";
+import { useMatrizPermisos } from "./_hooks/use-matriz-permisos";
 import { TablaMatrizPermisos } from "./_components/tabla-matriz-permisos";
 
 export default function PaginaRolesPermisos() {
-  const { matriz, cargando, guardando, error, hayCambiosPendientes, toggle, guardarCambios } = usarMatrizPermisos();
+  const { matriz, cargando, guardando, error, hayCambiosPendientes, toggle, guardarCambios } = useMatrizPermisos();
 
   return (
     <div className="p-6 md:p-7.5">

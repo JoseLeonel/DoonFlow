@@ -14,7 +14,6 @@ export function construirArbolNodos(nodos: any[]): NodoArbol[] {
       activo: n.activo, puntajeMaximo: Number(n.puntajeMaximo),
       tipoRespuesta: n.tipoRespuesta ?? undefined,
       modalidadPuntaje: n.modalidadPuntaje ?? undefined,
-      reglaComentario: n.reglaComentario,
       evidenciaObligatoria: n.evidenciaObligatoria,
       evidenciaMinima: n.evidenciaMinima, evidenciaMaxima: n.evidenciaMaxima,
       opciones: (n.opciones ?? []).map((o: any) => ({
@@ -75,7 +74,6 @@ export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
         activo: n.activo, puntajeMaximo: Number(n.puntajeMaximo),
         tipoRespuesta: n.tipoRespuesta ?? undefined,
         modalidadPuntaje: n.modalidadPuntaje ?? undefined,
-        reglaComentario: n.reglaComentario,
         evidenciaObligatoria: n.evidenciaObligatoria,
         evidenciaMinima: n.evidenciaMinima, evidenciaMaxima: n.evidenciaMaxima,
         opciones: (n.opciones ?? []).map((o: any) => ({
@@ -159,7 +157,7 @@ export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
       const clonarNodos = async (nodos: NodoArbol[], nuevoPadreId: string | null) => {
         for (const n of nodos) {
           const nuevo = await tx.inspeccionNodo.create({
-            data: { empresaId, plantillaId: nueva.id, padreId: nuevoPadreId, tipo: n.tipo as any, codigo: n.codigo, titulo: n.titulo, criterio: n.criterio, orden: n.orden, nivel: n.nivel, tipoRespuesta: n.tipoRespuesta as any, modalidadPuntaje: n.modalidadPuntaje as any, puntajeMaximo: n.puntajeMaximo, reglaComentario: n.reglaComentario as any, evidenciaObligatoria: n.evidenciaObligatoria, evidenciaMinima: n.evidenciaMinima, evidenciaMaxima: n.evidenciaMaxima },
+            data: { empresaId, plantillaId: nueva.id, padreId: nuevoPadreId, tipo: n.tipo as any, codigo: n.codigo, titulo: n.titulo, criterio: n.criterio, orden: n.orden, nivel: n.nivel, tipoRespuesta: n.tipoRespuesta as any, modalidadPuntaje: n.modalidadPuntaje as any, puntajeMaximo: n.puntajeMaximo, evidenciaObligatoria: n.evidenciaObligatoria, evidenciaMinima: n.evidenciaMinima, evidenciaMaxima: n.evidenciaMaxima },
           });
           for (const o of n.opciones) {
             await tx.inspeccionNodoOpcion.create({ data: { nodoId: nuevo.id, etiqueta: o.etiqueta, criterio: o.criterio, puntaje: o.puntaje, orden: o.orden } });
@@ -186,7 +184,6 @@ export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
         tipoRespuesta: (datos.tipoRespuesta ?? null) as any,
         modalidadPuntaje: (datos.modalidadPuntaje ?? null) as any,
         puntajeMaximo: datos.puntajeMaximo ?? 0,
-        reglaComentario: (datos.reglaComentario ?? "NUNCA") as any,
         evidenciaObligatoria: datos.evidenciaObligatoria ?? false,
         evidenciaMinima: datos.evidenciaMinima ?? 0,
         evidenciaMaxima: datos.evidenciaMaxima ?? 5,
@@ -199,7 +196,7 @@ export class PlantillaPrismaRepository implements PlantillaRepositoryPort {
   async actualizarNodo(nodoId: string, _empresaId: string, datos: any): Promise<NodoArbol> {
     const n = await this.prisma.inspeccionNodo.update({
       where: { id: nodoId },
-      data: { ...datos, tipo: datos.tipo as any, tipoRespuesta: datos.tipoRespuesta as any, modalidadPuntaje: datos.modalidadPuntaje as any, reglaComentario: datos.reglaComentario as any },
+      data: { ...datos, tipo: datos.tipo as any, tipoRespuesta: datos.tipoRespuesta as any, modalidadPuntaje: datos.modalidadPuntaje as any },
       include: { opciones: true },
     });
     return this.construirArbol([n])[0]!;

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { FormularioLogin } from "./_components/formulario-login";
 
 export const metadata = { title: "Iniciar sesión — DoonFlow" };
@@ -17,7 +18,9 @@ export default function PaginaLogin() {
                 Inicia sesión en tu cuenta de DoonFlow
               </p>
 
-              <FormularioLogin />
+              <Suspense fallback={null}>
+                <FormularioLogin />
+              </Suspense>
             </div>
           </div>
 

@@ -2,11 +2,11 @@
 
 import Link from "next/link";
 import { Paginador } from "@doonflow/ui";
-import { usarHistorialReportes } from "./_hooks/usar-historial-reportes";
+import { useHistorialReportes } from "./_hooks/use-historial-reportes";
 import { TablaHistorialReportes } from "./_components/tabla-historial-reportes";
 
 export default function PaginaHistorialReportes() {
-  const { reportes, total, pagina, porPagina, filtros, cargando, error, cambiarFiltros, cambiarPagina, cambiarPorPagina, descargar } = usarHistorialReportes();
+  const { reportes, total, pagina, porPagina, filtros, cargando, error, cambiarFiltros, cambiarPagina, cambiarPorPagina, descargar } = useHistorialReportes();
 
   return (
     <div className="p-6 md:p-7.5">

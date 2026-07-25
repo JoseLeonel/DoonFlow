@@ -1,3 +1,5 @@
+import { formatearFechaCalendario } from "@doonflow/shared";
+
 export class PlantillaNoEncontradaError extends Error {
   constructor(id: string) { super(`Plantilla ${id} no encontrada.`); }
 }
@@ -22,6 +24,11 @@ export class CertificacionNoEditableError extends Error {
 }
 export class SucursalRequeridaError extends Error {
   constructor() { super("Se requiere una sucursal para iniciar la certificación."); }
+}
+export class PeriodoCertificacionVigenteError extends Error {
+  constructor(fechaFinPeriodo: Date) {
+    super(`Ya existe una certificación vigente para esta sucursal hasta el ${formatearFechaCalendario(fechaFinPeriodo)}. Solo se puede iniciar una nueva cuando ese período termine.`);
+  }
 }
 export class SucursalFueraDeAlcanceError extends Error {
   constructor() { super("No tiene acceso a esta sucursal."); }
@@ -88,4 +95,13 @@ export class SinPermisoVerificacionError extends Error {
 }
 export class SinPermisoActualizarAvanceError extends Error {
   constructor() { super("Solo el responsable de la acción (o un administrador con alcance) puede actualizar su avance."); }
+}
+
+// ── Aceptación de certificación (011-aceptacion-apelaciones-certificacion) ─
+
+export class CertificacionYaAceptadaError extends Error {
+  constructor() { super("Esta certificación ya fue aceptada."); }
+}
+export class CertificacionNoFirmadaError extends Error {
+  constructor() { super("Solo se puede apelar o aceptar una certificación ya firmada."); }
 }

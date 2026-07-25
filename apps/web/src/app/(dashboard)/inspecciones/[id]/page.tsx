@@ -3,7 +3,7 @@
 import { useParams } from "next/navigation";
 import { Breadcrumb } from "@doonflow/ui";
 import { DialogoConfirmacion } from "@doonflow/ui";
-import { usarEditorPlantilla } from "../_hooks/usar-editor-plantilla";
+import { useEditorPlantilla } from "../_hooks/use-editor-plantilla";
 import { StripResumenPlantilla } from "../_components/strip-resumen-plantilla";
 import { TablaFicha } from "../_components/tabla-ficha";
 import { PanelEdicionNodo } from "../_components/panel-edicion-nodo";
@@ -11,7 +11,7 @@ import { TablaRangos } from "../_components/tabla-rangos";
 
 export default function PaginaEditorEstructura() {
   const { id } = useParams<{ id: string }>();
-  const editor = usarEditorPlantilla(id);
+  const editor = useEditorPlantilla(id);
 
   // ── Estado de carga ────────────────────────────────────────────────────────
 

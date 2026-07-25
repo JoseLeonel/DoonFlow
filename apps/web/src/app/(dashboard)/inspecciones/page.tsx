@@ -3,10 +3,10 @@
 import { useState } from "react";
 import Link from "next/link";
 import { TablaPlantillas } from "./_components/tabla-plantillas";
-import { usarPlantillas } from "./_hooks/usar-plantillas";
+import { usePlantillas } from "./_hooks/use-plantillas";
 
 export default function PaginaPlantillas() {
-  const { plantillas, total, cargando, error, recargar, toggleEstado, clonar } = usarPlantillas("");
+  const { plantillas, total, cargando, error, recargar, toggleEstado, clonar } = usePlantillas("");
   const [filtro, setFiltro] = useState<"todas" | "activas" | "inactivas">("todas");
 
   const plantillasFiltradas = plantillas.filter((p) => {

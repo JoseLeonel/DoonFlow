@@ -1,5 +1,6 @@
 export { cn } from "./utils/cn";
 export * from "./constants/roles";
+export * from "./constants/apelaciones";
 export * from "./types/usuario";
 export * from "./types/inspeccion";
 export * from "./types/cliente";
@@ -8,4 +9,9 @@ export * from "./types/certificacion";
 export * from "./types/permiso";
 export * from "./types/reportes";
 export * from "./types/integraciones";
+export * from "./types/apelacion";
+export * from "./types/notificacion";
+export * from "./types/plan-auditoria";
+export * from "./types/hallazgo-frecuente";
 export { contarPreguntas, sumarPuntajes, validarRangos } from "./utils/inspeccion";
+export { formatearFechaCalendario } from "./utils/fecha";

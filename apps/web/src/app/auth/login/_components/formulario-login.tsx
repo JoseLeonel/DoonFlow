@@ -3,11 +3,11 @@
 import { Boton, Casilla, GrupoInput } from "@doonflow/ui";
 import { useSearchParams } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { usarFormularioLogin } from "../_hooks/usar-formulario-login";
+import { useFormularioLogin } from "../_hooks/use-formulario-login";
 
 /** Presentación pura: no llama a _servicios/ directamente, solo usa el hook de la página. */
 export function FormularioLogin() {
-  const { enviar, cargando, error } = usarFormularioLogin();
+  const { enviar, cargando, error } = useFormularioLogin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const sesionExpirada = useSearchParams().get("motivo") === "sesion_expirada";

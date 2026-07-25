@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mock, Mocked } from "vitest";
 import { ImportarClientesUseCase } from "../application/casos-uso/importar-clientes.usecase";
 import type { GestionarClienteUseCase } from "../../clientes/application/casos-uso/gestionar-cliente.usecase";
 import type { ClienteRepositoryPort } from "../../clientes/domain/cliente.repository.port";
@@ -11,8 +11,8 @@ function filaValida(identificacion = "ID-1") {
 
 describe("ImportarClientesUseCase", () => {
   let clienteUseCase: { crear: Mock };
-  let clienteRepo: ClienteRepositoryPort & Record<string, Mock>;
-  let loteRepo: ImportacionLoteRepositoryPort & Record<string, Mock>;
+  let clienteRepo: Mocked<ClienteRepositoryPort>;
+  let loteRepo: Mocked<ImportacionLoteRepositoryPort>;
   let uc: ImportarClientesUseCase;
 
   beforeEach(() => {
@@ -21,11 +21,11 @@ describe("ImportarClientesUseCase", () => {
       listar: vi.fn(), obtenerPorId: vi.fn(), crear: vi.fn(), actualizar: vi.fn(),
       cambiarEstado: vi.fn(), existeIdentificacion: vi.fn().mockResolvedValue(false),
       buscarPorIdentificacion: vi.fn(),
-    } as unknown as ClienteRepositoryPort & Record<string, Mock>;
+    };
     loteRepo = {
       crear: vi.fn().mockImplementation((empresaId, usuarioId, datos) => Promise.resolve({ id: "lote1", empresaId, creadoPorId: usuarioId, ...datos })),
       listar: vi.fn(), obtenerPorId: vi.fn(),
-    } as unknown as ImportacionLoteRepositoryPort & Record<string, Mock>;
+    } as unknown as Mocked<ImportacionLoteRepositoryPort>;
 
     uc = new ImportarClientesUseCase(loteRepo, clienteUseCase as unknown as GestionarClienteUseCase, clienteRepo);
   });

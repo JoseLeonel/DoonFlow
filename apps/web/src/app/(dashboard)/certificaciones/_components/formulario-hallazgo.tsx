@@ -1,21 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Severidad } from "@doonflow/shared";
 
 interface PropsFormularioHallazgo {
   onCrear: (datos: { descripcion: string; severidad: Severidad; archivo?: File }) => Promise<void>;
   onCancelar: () => void;
+  /** 014-panel-calendario-biblioteca — precarga desde la biblioteca de hallazgos frecuentes, editable. */
+  precarga?: { descripcion: string; severidad: Severidad };
 }
 
 const OPCIONES_SEVERIDAD: Severidad[] = ["CRITICA", "MAYOR", "MENOR"];
 
-export function FormularioHallazgo({ onCrear, onCancelar }: PropsFormularioHallazgo) {
-  const [descripcion, setDescripcion] = useState("");
-  const [severidad, setSeveridad] = useState<Severidad>("MENOR");
+export function FormularioHallazgo({ onCrear, onCancelar, precarga }: PropsFormularioHallazgo) {
+  const [descripcion, setDescripcion] = useState(precarga?.descripcion ?? "");
+  const [severidad, setSeveridad] = useState<Severidad>(precarga?.severidad ?? "MENOR");
   const [archivo, setArchivo] = useState<File | undefined>(undefined);
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (precarga) {
+      setDescripcion(precarga.descripcion);
+      setSeveridad(precarga.severidad);
+    }
+  }, [precarga]);
 
   const enviar = async (e: React.FormEvent) => {
     e.preventDefault();

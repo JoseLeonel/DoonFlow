@@ -13,3 +13,8 @@ export const filaImportacionSucursalSchema = z.object({
   movil: z.string().max(20).nullable().optional().transform((v) => v || null),
 });
 export type FilaImportacionSucursalInput = z.infer<typeof filaImportacionSucursalSchema>;
+
+export const crearApiKeySchema = z.object({
+  nombre: z.string().min(1, "El nombre es requerido").max(100),
+});
+export type CrearApiKeyInput = z.infer<typeof crearApiKeySchema>;

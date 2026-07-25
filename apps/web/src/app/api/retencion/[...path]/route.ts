@@ -28,5 +28,5 @@ async function proxy(request: NextRequest, params: { path: string[] }) {
   return NextResponse.json(data, { status: apiRes.status });
 }
 
-export const GET = (req: NextRequest, ctx: any) => proxy(req, ctx.params);
-export const PUT = (req: NextRequest, ctx: any) => proxy(req, ctx.params);
+export const GET = async (req: NextRequest, ctx: any) => proxy(req, await ctx.params);
+export const PUT = async (req: NextRequest, ctx: any) => proxy(req, await ctx.params);

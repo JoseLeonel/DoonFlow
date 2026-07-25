@@ -36,7 +36,7 @@ export class PlanCumplimientoController {
   crearAccion = async (req: Request, res: Response, next: NextFunction) => {
     try {
       const input = crearAccionSchema.parse(req.body);
-      const accion = await this.accionUseCase.crear(req.params["id"]!, input);
+      const accion = await this.accionUseCase.crear(req.params["id"]!, req.usuario!.empresaId, input);
       res.status(201).json(respuestaExitosa(accion));
     } catch (e) { next(this.m(e)); }
   };

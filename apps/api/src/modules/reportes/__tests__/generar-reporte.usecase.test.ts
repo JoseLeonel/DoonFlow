@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mock, Mocked } from "vitest";
 import { GenerarReporteUseCase } from "../application/casos-uso/generar-reporte.usecase";
 import { AccesoModuloReportesDenegadoError, ClienteFueraDeAlcanceError } from "../domain/reporte.errors";
 import type { ReporteRepositoryPort } from "../domain/reporte.repository.port";
@@ -8,14 +8,15 @@ import type { GeneradorPdfPort } from "../domain/generador-pdf.port";
 import type { ReporteStoragePort } from "../domain/reporte-storage.port";
 import type { GenerarReporteInput } from "../application/reporte.schema";
 
-function crearRepoMock(): ReporteRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<ReporteRepositoryPort> {
   return {
     listarHistorial: vi.fn(),
     crear: vi.fn(),
     obtenerPorId: vi.fn(),
     obtenerDatosConsolidadoCliente: vi.fn(),
     obtenerDatosComparativoSucursales: vi.fn(),
-  } as unknown as ReporteRepositoryPort & Record<string, Mock>;
+    obtenerPanelEjecutivo: vi.fn(),
+  };
 }
 
 const inputBase: GenerarReporteInput = {

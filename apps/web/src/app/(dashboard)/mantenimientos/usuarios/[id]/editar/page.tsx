@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@doonflow/shared";
 import { FormularioUsuario } from "../../_components/formulario-usuario";
@@ -10,7 +10,8 @@ import { listarClientes } from "../../../clientes/_servicios/cliente.servicio";
 import type { DatosGuardarUsuario, RolCatalogo, UsuarioConAlcance } from "../../_servicios/usuario.servicio";
 import type { Cliente } from "../../../clientes/_servicios/cliente.servicio";
 
-export default function PaginaEditarUsuario({ params }: { params: { id: string } }) {
+export default function PaginaEditarUsuario() {
+  const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const [usuario,   setUsuario]   = useState<UsuarioConAlcance | null>(null);
   const [roles,     setRoles]     = useState<RolCatalogo[]>([]);
@@ -21,18 +22,18 @@ export default function PaginaEditarUsuario({ params }: { params: { id: string }
   const [exito,     setExito]     = useState(false);
 
   useEffect(() => {
-    Promise.all([obtenerUsuario(params.id), listarRoles(), listarClientes(1, 1000)])
+    Promise.all([obtenerUsuario(id), listarRoles(), listarClientes(1, 1000)])
       .then(([u, r, c]) => { setUsuario(u); setRoles(r); setClientes(c.items); })
       .catch(() => setError("Usuario no encontrado."))
       .finally(() => setCargando(false));
-  }, [params.id]);
+  }, [id]);
 
   const handleGuardar = async (datos: DatosGuardarUsuario) => {
     setGuardando(true);
     setError(null);
     setExito(false);
     try {
-      const actualizado = await actualizarUsuario(params.id, datos);
+      const actualizado = await actualizarUsuario(id, datos);
       setUsuario(actualizado);
       setExito(true);
     } catch (e: any) {

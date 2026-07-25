@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarMatrizPermisosUseCase } from "../application/casos-uso/gestionar-matriz-permisos.usecase";
 import { PermisoInvalidoError, RolNoEditableError, RolNoEncontradoError } from "../domain/rol-permiso.errors";
 import type { RolPermisoRepositoryPort } from "../domain/rol-permiso.repository.port";
 
-function crearRepoMock(): RolPermisoRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<RolPermisoRepositoryPort> {
   return {
     obtenerMatriz: vi.fn(),
     obtenerRolPorId: vi.fn(),
     listarPermisosPorIds: vi.fn(),
     asignarPermisos: vi.fn(),
     listarCodigosPermisoDelRol: vi.fn(),
-  } as unknown as RolPermisoRepositoryPort & Record<string, Mock>;
+  };
 }
 
 describe("GestionarMatrizPermisosUseCase", () => {

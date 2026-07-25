@@ -15,3 +15,15 @@ export class ImportacionLoteNoEncontradoError extends Error {
     super("El lote de importación no existe o no pertenece a esta empresa.");
   }
 }
+
+export class ApiKeyNoEncontradaError extends Error {
+  constructor() {
+    super("La clave de API no existe o no pertenece a esta empresa.");
+  }
+}
+
+export class ApiKeyRevocadaError extends Error {
+  constructor() {
+    super("Esta clave de API fue revocada y ya no es válida.");
+  }
+}

@@ -23,7 +23,7 @@ interface Props {
   onGenerar: () => void;
 }
 
-/** Formulario controlado — todo el estado vive en el hook `usarGenerarReporte`, aquí solo se renderiza y notifica cambios. */
+/** Formulario controlado — todo el estado vive en el hook `useGenerarReporte`, aquí solo se renderiza y notifica cambios. */
 export function FormularioGenerarReporte({
   tipo, onTipoChange,
   clienteId, onClienteIdChange, clientes, clienteFijo,

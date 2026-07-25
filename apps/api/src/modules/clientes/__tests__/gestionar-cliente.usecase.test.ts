@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { Mock } from "vitest";
+import type { Mocked } from "vitest";
 import { GestionarClienteUseCase } from "../application/casos-uso/gestionar-cliente.usecase";
 import type { ClienteRepositoryPort } from "../domain/cliente.repository.port";
 
-function crearRepoMock(): ClienteRepositoryPort & Record<string, Mock> {
+function crearRepoMock(): Mocked<ClienteRepositoryPort> {
   return {
     listar: vi.fn(),
     obtenerPorId: vi.fn(),
@@ -11,7 +11,8 @@ function crearRepoMock(): ClienteRepositoryPort & Record<string, Mock> {
     actualizar: vi.fn(),
     cambiarEstado: vi.fn(),
     existeIdentificacion: vi.fn(),
-  } as unknown as ClienteRepositoryPort & Record<string, Mock>;
+    buscarPorIdentificacion: vi.fn(),
+  };
 }
 
 describe("GestionarClienteUseCase — paginación (010-seguridad-privacidad-continuidad)", () => {

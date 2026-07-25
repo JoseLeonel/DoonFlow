@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { RequestHandler } from "express";
 import { GenerarReporteUseCase } from "./application/casos-uso/generar-reporte.usecase";
 import { ListarHistorialReportesUseCase } from "./application/casos-uso/listar-historial-reportes.usecase";
+import { ObtenerPanelEjecutivoUseCase } from "./application/casos-uso/obtener-panel-ejecutivo.usecase";
 import { ReporteController } from "./infrastructure/reporte.controller";
 import { ReportePrismaRepository } from "./infrastructure/reporte.prisma-repository";
 import { ReporteExcelAdapter } from "./infrastructure/reporte-excel.adapter";
@@ -24,7 +25,8 @@ export function crearModuloReportes(
 
   const generarUseCase = new GenerarReporteUseCase(repo, generadorExcel, generadorPdf, storage);
   const historialUseCase = new ListarHistorialReportesUseCase(repo);
-  const controller = new ReporteController(generarUseCase, historialUseCase);
+  const panelEjecutivoUseCase = new ObtenerPanelEjecutivoUseCase(repo);
+  const controller = new ReporteController(generarUseCase, historialUseCase, panelEjecutivoUseCase);
 
   return {
     router: crearReportesRouter(controller, autenticar, resolverAlcance),

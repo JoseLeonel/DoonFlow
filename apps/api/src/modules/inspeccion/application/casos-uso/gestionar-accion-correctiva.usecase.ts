@@ -13,6 +13,7 @@ import type { ActualizarAccionInput, ActualizarAvanceInput, VerificarAccionInput
 import type { CrearAccionInput } from "../plan-cumplimiento.schema";
 import type { ArchivoSubido } from "./responder-certificacion.usecase";
 import type { UsuarioAutenticado } from "./gestionar-plan-cumplimiento.usecase";
+import type { RegistradorNotificacion } from "../../../../shared/notificaciones/registrar-notificacion";
 
 /**
  * Gestiona las acciones correctivas de un plan de cumplimiento: creación, edición, avance del
@@ -22,16 +23,31 @@ export class GestionarAccionCorrectivaUseCase {
   constructor(
     private readonly repo: AccionCorrectivaRepositoryPort,
     private readonly almacenamiento: AlmacenamientoEvidenciasPort,
+    /** 006-vigencia-notificaciones-portal — evento síncrono ACCION_ASIGNADA, opcional para no romper tests existentes. */
+    private readonly registrarNotificacion?: RegistradorNotificacion,
   ) {}
 
-  crear(planCumplimientoId: string, input: CrearAccionInput) {
-    return this.repo.crear({
+  async crear(planCumplimientoId: string, empresaId: string, input: CrearAccionInput) {
+    const accion = await this.repo.crear({
       planCumplimientoId,
       hallazgoId: input.hallazgoId,
       descripcion: input.descripcion,
       responsableId: input.responsableId,
       fechaLimite: input.fechaLimite,
     });
+
+    if (this.registrarNotificacion) {
+      await this.registrarNotificacion({
+        usuarioId: accion.responsableId,
+        empresaId,
+        tipo: "ACCION_ASIGNADA",
+        referenciaTipo: "accion_correctiva",
+        referenciaId: accion.id,
+        contexto: { descripcionAccion: accion.descripcion },
+      });
+    }
+
+    return accion;
   }
 
   async actualizar(id: string, empresaId: string, input: ActualizarAccionInput) {

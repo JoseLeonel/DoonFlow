@@ -1,4 +1,4 @@
-import { generarCodigoVerificacion, puedeFirmarse } from "../../domain/certificacion.entity";
+import { formatearPeriodoCertificacion, generarCodigoVerificacion, puedeFirmarse } from "../../domain/certificacion.entity";
 import {
   CertificacionConHallazgoCriticoError,
   CertificacionNoEditableError,
@@ -11,6 +11,7 @@ import type { GeneradorPdfCertificacionPort } from "../../domain/generador-pdf-c
 import type { AlcanceConsulta, CertificacionRepositoryPort } from "../../domain/certificacion.repository.port";
 import type { HallazgoRepositoryPort } from "../../domain/hallazgo.repository.port";
 import type { FirmarCertificacionInput } from "../certificacion.schema";
+import type { GestionarHallazgosUseCase } from "./gestionar-hallazgos.usecase";
 
 const MAX_INTENTOS_CODIGO = 5;
 
@@ -28,6 +29,15 @@ export class FirmarCertificacionUseCase {
     private readonly generadorPdf: GeneradorPdfCertificacionPort,
     private readonly almacenamientoPdf: AlmacenamientoEvidenciasPort,
     private readonly hallazgoRepo?: HallazgoRepositoryPort,
+    /**
+     * Opcional para no romper tests existentes que no lo mockean. Cuando se inyecta, genera los
+     * hallazgos automáticos (desde respuestas incumplidas, 013) antes de firmar — encontrado en
+     * la ronda de pruebas E2E en Chrome del 2026-07-24: sin esto, un auditor podía firmar una
+     * certificación con incumplimientos reales sin generar nunca el hallazgo correspondiente
+     * (el bloqueo por hallazgo CRÍTICA de `sp_inspeccion_firmar` solo protege si el hallazgo ya
+     * existe en BD en el momento de firmar). `generarAutomaticos` es idempotente.
+     */
+    private readonly gestionarHallazgos?: GestionarHallazgosUseCase,
   ) {}
 
   async ejecutar(
@@ -44,6 +54,11 @@ export class FirmarCertificacionUseCase {
       throw new SincronizacionPendienteError(input.pendientesSincronizacion);
     }
 
+    if (this.gestionarHallazgos) {
+      await this.gestionarHallazgos.generarAutomaticos(id, empresaId, alcance);
+      await this.gestionarHallazgos.sincronizarComentariosCategorizados(id, empresaId, alcance);
+    }
+
     const firmada = await this.firmarConReintento(id, usuarioId);
 
     const hallazgos = this.hallazgoRepo ? await this.hallazgoRepo.listarPorInspeccion(id, empresaId) : [];
@@ -51,7 +66,7 @@ export class FirmarCertificacionUseCase {
     const pdfBuffer = await this.generadorPdf.generar({
       certificacionId: firmada.id,
       plantillaNombre: certificacion.plantilla.nombre,
-      periodoEtiqueta: firmada.periodoEtiqueta,
+      periodoEtiqueta: formatearPeriodoCertificacion(firmada),
       puntajeObtenido: firmada.puntajeObtenido,
       puntajeMaximo: firmada.puntajeMaximo,
       porcentajeCumplimiento: firmada.porcentajeCumplimiento,
@@ -60,7 +75,8 @@ export class FirmarCertificacionUseCase {
       codigoVerificacion: firmada.codigoVerificacion!,
       firmadoEn: firmada.firmadoEn!,
       fechaVencimiento: firmada.fechaVencimiento!,
-      hallazgos: hallazgos.length > 0 ? hallazgos.map((h) => ({ descripcion: h.descripcion, severidad: h.severidad })) : undefined,
+      hallazgos: hallazgos.length > 0 ? hallazgos.map((h) => ({ descripcion: h.descripcion, categoria: h.categoria, severidad: h.severidad })) : undefined,
+      urlVerificacion: `${process.env.WEB_PUBLIC_URL ?? "http://localhost:3000"}/verificar/${firmada.codigoVerificacion}`,
     });
 
     const ruta = `${empresaId}/${id}/certificado.pdf`;

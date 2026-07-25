@@ -117,3 +117,92 @@ export interface DatosComparativoSucursales {
   periodo: { fechaDesde: string; fechaHasta: string };
   filas: FilaComparativaSucursal[];
 }
+
+// ── Panel ejecutivo (014-panel-calendario-biblioteca, HU-4) ─────────────────
+// Ya no tiene el alcance reducido de 008: 005 (fechaVencimiento) y 013 (Hallazgo/AccionCorrectiva)
+// están implementados.
+
+export type TipoItemAtencion = "certificacion_por_vencer" | "accion_vencida";
+
+export interface ItemAtencion {
+  tipo: TipoItemAtencion;
+  sucursal: string;
+  cliente: string;
+  /** Solo para `certificacion_por_vencer`. */
+  fecha?: string;
+  diasRestantes?: number;
+  /** Solo para `accion_vencida`. */
+  descripcion?: string;
+  diasVencida?: number;
+}
+
+export interface PanelEjecutivo {
+  pctSucursalesVigentes: number;
+  certificacionesPorVencer30d: number;
+  hallazgosCriticosAbiertos: number;
+  accionesVencidas: number;
+  atencionRequerida: ItemAtencion[];
+}
+
+export interface DatosPanelEjecutivoCrudo {
+  totalSucursales: number;
+  sucursalesVigentes: number;
+  certificacionesPorVencer: { sucursal: string; cliente: string; fechaVencimiento: Date }[];
+  hallazgosCriticosAbiertos: number;
+  accionesVencidas: { descripcion: string; sucursal: string; cliente: string; fechaLimite: Date }[];
+}
+
+/**
+ * Calcula el % de sucursales con una certificación vigente — 0 si no hay sucursales en alcance
+ * (evita división por cero).
+ *
+ * @param vigentes - Sucursales con al menos una certificación `FIRMADA` no vencida.
+ * @param total - Total de sucursales activas en el alcance consultado.
+ * @returns Porcentaje redondeado a 1 decimal.
+ * @example
+ *   calcularPctSucursalesVigentes(3, 4)  // → 75
+ *   calcularPctSucursalesVigentes(0, 0)  // → 0
+ */
+export function calcularPctSucursalesVigentes(vigentes: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((vigentes / total) * 1000) / 10;
+}
+
+/**
+ * Combina certificaciones por vencer y acciones vencidas en una sola lista de "atención
+ * requerida", ordenada por urgencia (más próxima a vencer / más vencida primero).
+ *
+ * @param datos - Datos crudos agregados del repositorio.
+ * @param ahora - Instante de referencia (parametrizable para tests).
+ * @returns Lista combinada y ordenada.
+ * @example
+ *   construirAtencionRequerida({ certificacionesPorVencer: [], accionesVencidas: [], totalSucursales: 0, sucursalesVigentes: 0, hallazgosCriticosAbiertos: 0 })  // → []
+ */
+export function construirAtencionRequerida(
+  datos: Pick<DatosPanelEjecutivoCrudo, "certificacionesPorVencer" | "accionesVencidas">,
+  ahora: Date = new Date(),
+): ItemAtencion[] {
+  const diasEntre = (a: Date, b: Date) => Math.ceil((a.getTime() - b.getTime()) / (1000 * 60 * 60 * 24));
+
+  const porVencer: ItemAtencion[] = datos.certificacionesPorVencer.map((c) => ({
+    tipo: "certificacion_por_vencer",
+    sucursal: c.sucursal,
+    cliente: c.cliente,
+    fecha: c.fechaVencimiento.toISOString().slice(0, 10),
+    diasRestantes: diasEntre(c.fechaVencimiento, ahora),
+  }));
+
+  const vencidas: ItemAtencion[] = datos.accionesVencidas.map((a) => ({
+    tipo: "accion_vencida",
+    sucursal: a.sucursal,
+    cliente: a.cliente,
+    descripcion: a.descripcion,
+    diasVencida: diasEntre(ahora, a.fechaLimite),
+  }));
+
+  return [...porVencer, ...vencidas].sort((a, b) => {
+    const urgenciaA = a.diasVencida !== undefined ? -a.diasVencida : (a.diasRestantes ?? Infinity);
+    const urgenciaB = b.diasVencida !== undefined ? -b.diasVencida : (b.diasRestantes ?? Infinity);
+    return urgenciaA - urgenciaB;
+  });
+}

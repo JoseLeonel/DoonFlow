@@ -26,7 +26,9 @@ function mapHallazgo(h: any): HallazgoConEvidencias {
     inspeccionId: h.inspeccionId,
     detalleId: h.detalleId ?? null,
     descripcion: h.descripcion,
-    severidad: h.severidad as Hallazgo["severidad"],
+    categoria: h.categoria as Hallazgo["categoria"],
+    severidad: (h.severidad ?? null) as Hallazgo["severidad"],
+    estado: h.estado as Hallazgo["estado"],
     creadoEn: h.creadoEn,
     evidencias: (h.evidencias ?? []).map(mapEvidencia),
   };
@@ -46,10 +48,22 @@ export class HallazgoPrismaRepository implements HallazgoRepositoryPort {
 
   async listarDetalleIdsConHallazgo(inspeccionId: string): Promise<Set<string>> {
     const filas = await this.prisma.hallazgo.findMany({
-      where: { inspeccionId, detalleId: { not: null } },
+      where: { inspeccionId, categoria: "NO_CONFORMIDAD", detalleId: { not: null } },
       select: { detalleId: true },
     });
     return new Set(filas.map((f) => f.detalleId!));
+  }
+
+  async listarClavesComentarioConHallazgo(inspeccionId: string): Promise<Set<string>> {
+    const filas = await this.prisma.hallazgo.findMany({
+      where: {
+        inspeccionId,
+        categoria: { in: ["RECONOCIMIENTO", "OBSERVACION", "OPORTUNIDAD_MEJORA"] },
+        detalleId: { not: null },
+      },
+      select: { detalleId: true, categoria: true },
+    });
+    return new Set(filas.map((f) => `${f.detalleId}::${f.categoria}`));
   }
 
   async crear(datos: DatosCrearHallazgo): Promise<HallazgoConEvidencias> {
@@ -58,7 +72,8 @@ export class HallazgoPrismaRepository implements HallazgoRepositoryPort {
         inspeccionId: datos.inspeccionId,
         empresaId: datos.empresaId,
         descripcion: datos.descripcion,
-        severidad: datos.severidad,
+        categoria: datos.categoria,
+        severidad: datos.severidad ?? null,
         detalleId: datos.detalleId ?? null,
       },
       include: { evidencias: true },
@@ -75,7 +90,8 @@ export class HallazgoPrismaRepository implements HallazgoRepositoryPort {
               inspeccionId: d.inspeccionId,
               empresaId: d.empresaId,
               descripcion: d.descripcion,
-              severidad: d.severidad,
+              categoria: d.categoria,
+              severidad: d.severidad ?? null,
               detalleId: d.detalleId ?? null,
             },
             include: { evidencias: true },
@@ -92,6 +108,12 @@ export class HallazgoPrismaRepository implements HallazgoRepositoryPort {
 
   async actualizar(id: string, empresaId: string, datos: DatosActualizarHallazgo): Promise<HallazgoConEvidencias> {
     await this.prisma.hallazgo.updateMany({ where: { id, empresaId }, data: datos });
+    const h = await this.prisma.hallazgo.findFirstOrThrow({ where: { id, empresaId }, include: { evidencias: true } });
+    return mapHallazgo(h);
+  }
+
+  async anularPorApelacion(id: string, empresaId: string): Promise<HallazgoConEvidencias> {
+    await this.prisma.hallazgo.updateMany({ where: { id, empresaId }, data: { estado: "ANULADO_POR_APELACION" } });
     const h = await this.prisma.hallazgo.findFirstOrThrow({ where: { id, empresaId }, include: { evidencias: true } });
     return mapHallazgo(h);
   }
