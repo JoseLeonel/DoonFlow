@@ -4,6 +4,21 @@ Ver formato y diferencia con `packages/db/produccion/` en `memoria/cambios_db/RE
 
 ---
 
+## [2026-07-25] Comentarios categorizados del wizard + clasificación del reporte de hallazgos (revisión de audios WhatsApp del cliente)
+
+- Tipo: 2 columnas eliminadas + 1 enum eliminado (`InspeccionNodo`) + 1 columna reemplazada por 3 (`InspeccionDetalle`) + 2 columnas nuevas (`Hallazgo`, una de ellas relaja un `NOT NULL` existente) + 1 índice nuevo
+- Módulo: `inspeccion` (extiende 013-hallazgos-plan-cumplimiento y 015-wizard-certificacion)
+- Motivo: el cliente pidió en varios audios de WhatsApp (2026-06-03/04, revisados el 2026-07-25) que cada pregunta del wizard tenga 3 comentarios siempre visibles — reconocimiento, observación, oportunidad de mejora — independientes de si la respuesta es Sí o No, y que el reporte de hallazgos los clasifique en esas 3 categorías además de las no conformidades.
+- Detalle:
+  - `inspeccion_nodo`: se eliminan `regla_comentario` (enum `ReglaComentario`) y `umbral_comentario` — el comentario condicional único por pregunta queda reemplazado por completo, no coexiste con el sistema nuevo.
+  - `inspeccion_detalle`: se elimina `comentario` (único) y se agregan `comentario_reconocimiento`, `comentario_observacion`, `comentario_oportunidad_mejora` (los 3 `TEXT` nullable, sin límite de BD — el límite de 1500 caracteres con contador vive solo en la validación Zod/UI, pedido explícito del cliente).
+  - `hallazgo`: se agrega `categoria` (`VARCHAR(20)`, default `'NO_CONFORMIDAD'` — valores `NO_CONFORMIDAD`/`RECONOCIMIENTO`/`OBSERVACION`/`OPORTUNIDAD_MEJORA`) y se relaja `severidad` a nullable (`null` para las 3 categorías informativas, que no disparan plan de cumplimiento ni notificación — solo `NO_CONFORMIDAD` conserva el comportamiento existente de 013). Índice nuevo `(inspeccion_id, categoria)`.
+  - `sp_inspeccion_firmar.sql` **no se modificó** — sus filtros `severidad = 'CRITICA'` / `severidad IN ('MAYOR','MENOR')` ya excluyen naturalmente las filas con `severidad IS NULL`.
+- Migración/archivo: `packages/db/prisma/schema.prisma`, `packages/db/prisma/migrations/20260725000000_add_comentarios_categorizados/migration.sql`
+- Estado: aplicado en desarrollo local (`doonflow_dev`, puerto 5433) vía `prisma migrate deploy` (DB alcanzable en esta sesión). `prisma generate` ejecutado. Pendiente aplicar en producción cuando exista ese ambiente.
+
+---
+
 ## [2026-07-24] Período de certificación como rango de fechas (post-roadmap, exploración manual)
 
 - Tipo: 2 columnas nuevas + 1 índice nuevo (sin tabla nueva)
